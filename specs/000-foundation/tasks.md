@@ -1,0 +1,23 @@
+# Foundation Tasks
+
+- [x] Create engineering constitution.
+- [x] Create foundation specification and plan.
+- [x] Create architecture decision records.
+- [x] Configure pnpm workspaces and Turborepo.
+- [x] Configure strict TypeScript, ESLint, Prettier, Vitest, and CI.
+- [x] Implement dataset aggregate and domain tests.
+- [x] Implement CQRS buses, ports, and initial command handler.
+- [x] Implement shared Zod contracts.
+- [x] Add typed environment parser.
+- [x] Add Drizzle schema and database client.
+- [x] Add Redis, BullMQ queues, and worker processor foundation.
+- [x] Add Redis-backed rate limiter.
+- [x] Add S3-compatible storage adapter.
+- [x] Add Qdrant readiness and collection initialization.
+- [x] Add DuckDB readiness foundation.
+- [x] Add Pino structured logging.
+- [x] Add Next.js web app and health/readiness endpoints.
+- [x] Add LangGraph package scaffold.
+- [x] Add knowledge-base policies, glossary, and example.
+- [x] Add Dockerfiles, Compose, init scripts, and Makefile.
+- [ ] Run all validation commands in the target environment.

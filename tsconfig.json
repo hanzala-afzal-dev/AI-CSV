@@ -1,0 +1,24 @@
+{
+  "extends": "./packages/config/typescript/base.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@agentic-csv/domain": ["packages/domain/src/index.ts"],
+      "@agentic-csv/application": ["packages/application/src/index.ts"],
+      "@agentic-csv/contracts": ["packages/contracts/src/index.ts"],
+      "@agentic-csv/infrastructure": ["packages/infrastructure/src/index.ts"],
+      "@agentic-csv/agent": ["packages/agent/src/index.ts"]
+    }
+  },
+  "include": [
+    "apps/**/*.ts",
+    "apps/**/*.tsx",
+    "packages/**/*.ts",
+    "packages/**/*.tsx",
+    "scripts/**/*.mjs",
+    "drizzle.config.ts",
+    "vitest.config.ts",
+    "eslint.config.mjs"
+  ],
+  "exclude": ["node_modules", "dist", ".next"]
+}

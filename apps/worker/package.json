@@ -1,0 +1,27 @@
+{
+  "name": "@agentic-csv/worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsup src/index.ts --format esm --platform node --dts --clean",
+    "start": "node dist/index.js",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run tests/*.test.ts --passWithNoTests",
+    "test:coverage": "vitest run tests/*.test.ts --coverage --passWithNoTests"
+  },
+  "dependencies": {
+    "@agentic-csv/contracts": "workspace:*",
+    "@agentic-csv/infrastructure": "workspace:*",
+    "bullmq": "5.79.3"
+  },
+  "devDependencies": {
+    "@types/node": "26.1.0",
+    "tsup": "8.5.1",
+    "tsx": "4.23.0",
+    "typescript": "6.0.3",
+    "vitest": "4.1.10"
+  }
+}

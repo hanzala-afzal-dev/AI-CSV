@@ -1,0 +1,12 @@
+node_modules
+.corepack
+.pnpm-store
+.next
+dist
+.turbo
+coverage
+.git
+.env
+.env.local
+storage/*
+*.log

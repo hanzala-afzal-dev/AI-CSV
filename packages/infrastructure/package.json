@@ -1,0 +1,79 @@
+{
+  "name": "@agentic-csv/infrastructure",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/src/index.d.ts",
+      "import": "./dist/src/index.js"
+    },
+    "./config": {
+      "types": "./dist/src/config/env.d.ts",
+      "import": "./dist/src/config/env.js"
+    },
+    "./database": {
+      "types": "./dist/src/database/client.d.ts",
+      "import": "./dist/src/database/client.js"
+    },
+    "./health": {
+      "types": "./dist/src/health/readiness.d.ts",
+      "import": "./dist/src/health/readiness.js"
+    },
+    "./logging": {
+      "types": "./dist/src/logging/logger.d.ts",
+      "import": "./dist/src/logging/logger.js"
+    },
+    "./queue": {
+      "types": "./dist/src/queue/queues.d.ts",
+      "import": "./dist/src/queue/queues.js"
+    },
+    "./rate-limit": {
+      "types": "./dist/src/rate-limit/rate-limiter.d.ts",
+      "import": "./dist/src/rate-limit/rate-limiter.js"
+    },
+    "./redis": {
+      "types": "./dist/src/redis/client.d.ts",
+      "import": "./dist/src/redis/client.js"
+    },
+    "./storage": {
+      "types": "./dist/src/storage/s3-object-storage.d.ts",
+      "import": "./dist/src/storage/s3-object-storage.js"
+    },
+    "./vector": {
+      "types": "./dist/src/vector/qdrant.d.ts",
+      "import": "./dist/src/vector/qdrant.js"
+    },
+    "./drizzle/schema": {
+      "types": "./dist/drizzle/schema.d.ts",
+      "import": "./dist/drizzle/schema.js"
+    }
+  },
+  "scripts": {
+    "build": "tsup src/index.ts src/config/env.ts src/database/client.ts src/health/readiness.ts src/logging/logger.ts src/queue/queues.ts src/rate-limit/rate-limiter.ts src/redis/client.ts src/storage/s3-object-storage.ts src/vector/qdrant.ts drizzle/schema.ts --format esm --dts --clean",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run tests/*.test.ts --passWithNoTests",
+    "test:coverage": "vitest run tests/*.test.ts --coverage --passWithNoTests"
+  },
+  "dependencies": {
+    "@agentic-csv/application": "workspace:*",
+    "@agentic-csv/contracts": "workspace:*",
+    "@aws-sdk/client-s3": "3.1080.0",
+    "@aws-sdk/s3-request-presigner": "3.1080.0",
+    "@duckdb/node-api": "1.5.4-r.1",
+    "@qdrant/js-client-rest": "1.18.0",
+    "bullmq": "5.79.3",
+    "drizzle-orm": "0.45.2",
+    "pg": "8.22.0",
+    "pino": "10.3.1",
+    "redis": "6.1.0",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@types/pg": "8.20.0",
+    "tsup": "8.5.1",
+    "typescript": "6.0.3",
+    "vitest": "4.1.10"
+  }
+}

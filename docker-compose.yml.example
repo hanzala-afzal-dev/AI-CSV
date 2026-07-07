@@ -1,0 +1,11 @@
+# Optional root-level Compose wrapper.
+#
+# The canonical Compose file lives at:
+#   docker/docker-compose.yml
+#
+# Copy this file to docker-compose.yml only if you want `docker compose ...`
+# to work from the repository root without passing `-f docker/docker-compose.yml`.
+# When using this example file directly with `-f`, also pass `--env-file .env`.
+
+include:
+  - path: docker/docker-compose.yml

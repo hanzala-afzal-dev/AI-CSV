@@ -1,0 +1,17 @@
+**/.env
+**/.env.local
+**/.env.*
+**/.env.*.local
+**/docker-compose.yml
+!**/*.example
+node_modules/
+.corepack/
+.pnpm-store/
+dist/
+.next/
+.turbo/
+coverage/
+storage/*
+!storage/.gitkeep
+*.log
+*.tsbuildinfo

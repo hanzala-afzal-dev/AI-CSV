@@ -1,0 +1,10 @@
+export type { DomainEvent } from "./shared/domain-event";
+export { AggregateRoot } from "./shared/aggregate-root";
+export { createDomainEvent } from "./shared/domain-event";
+export { DomainError } from "./shared/domain-error";
+export type { DomainErrorCode } from "./shared/domain-error";
+export { Dataset } from "./dataset/dataset";
+export type { DatasetProps, DatasetProfileStats } from "./dataset/dataset";
+export { DatasetId } from "./dataset/dataset-id";
+export { datasetStatuses } from "./dataset/dataset-status";
+export type { DatasetStatus } from "./dataset/dataset-status";
