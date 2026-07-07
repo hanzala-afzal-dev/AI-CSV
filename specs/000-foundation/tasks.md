@@ -4,7 +4,8 @@
 - [x] Create foundation specification and plan.
 - [x] Create architecture decision records.
 - [x] Configure pnpm workspaces and Turborepo.
-- [x] Configure strict TypeScript, ESLint, Prettier, Vitest, and CI.
+- [x] Configure strict TypeScript, ESLint, Prettier, and Vitest.
+- [ ] Re-enable GitHub Actions CI after pipeline failures are investigated.
 - [x] Implement dataset aggregate and domain tests.
 - [x] Implement CQRS buses, ports, and initial command handler.
 - [x] Implement shared Zod contracts.

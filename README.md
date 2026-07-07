@@ -69,6 +69,11 @@ pnpm build
 Use `.env` as the project-level source of truth. Start from `.env.example` when
 resetting local values. Docker-only overrides live in `docker/.env`; start from
 `docker/.env.example` when resetting those values. Both `.env` files are ignored.
+The local Compose file is also ignored; create it from the tracked template:
+
+```bash
+cp docker/docker-compose.yml.example docker/docker-compose.yml
+```
 
 ## Infrastructure-Only Development
 
@@ -104,9 +109,10 @@ pnpm --filter @agentic-csv/web exec next dev --port 3001
 
 ## Fully Containerized Workflow
 
-The canonical Compose file is `docker/docker-compose.yml`. Root scripts already pass
-that path. `docker-compose.yml.example` is an optional wrapper if you want root-level
-Compose auto-discovery.
+The local Compose file is `docker/docker-compose.yml`, created from
+`docker/docker-compose.yml.example`. Root scripts already pass that path.
+`docker-compose.yml.example` is an optional wrapper if you want root-level Compose
+auto-discovery.
 
 Validate Compose:
 

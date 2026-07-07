@@ -1,0 +1,133 @@
+# Copy this file to docker/docker-compose.yml for local development.
+# The copied docker/docker-compose.yml file is intentionally gitignored so local
+# Compose changes do not get committed.
+
+name: agentic-csv-analyst
+
+x-env-files: &env-files
+  env_file:
+    - ../.env
+    - ./.env
+
+services:
+  postgres:
+    <<: *env-files
+    image: pgvector/pgvector:pg17
+    ports:
+      - "${POSTGRES_PORT}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - agentic-csv
+
+  redis:
+    <<: *env-files
+    image: redis:8-alpine
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory-policy", "noeviction"]
+    ports:
+      - "${REDIS_PORT}:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - agentic-csv
+
+  qdrant:
+    <<: *env-files
+    image: qdrant/qdrant:v1.16.3
+    ports:
+      - "${QDRANT_PORT}:6333"
+      - "${QDRANT_GRPC_PORT}:6334"
+    volumes:
+      - qdrant-data:/qdrant/storage
+    healthcheck:
+      test: ["CMD-SHELL", "bash -lc ': > /dev/tcp/127.0.0.1/6333'"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - agentic-csv
+
+  localstack:
+    <<: *env-files
+    image: localstack/localstack:4.11.1
+    ports:
+      - "${LOCALSTACK_PORT}:4566"
+    volumes:
+      - localstack-data:/var/lib/localstack
+      - ./localstack/init:/etc/localstack/init/ready.d:ro
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          'curl -fs http://localhost:4566/_localstack/health | grep -Eq ''"s3": "(available|running)"'''
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 8
+    networks:
+      - agentic-csv
+
+  web:
+    <<: *env-files
+    profiles: ["app"]
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.web
+    ports:
+      - "${APP_PORT}:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+      localstack:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/api/health >/dev/null"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    networks:
+      - agentic-csv
+
+  worker:
+    <<: *env-files
+    profiles: ["app"]
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.worker
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+      localstack:
+        condition: service_healthy
+    stop_grace_period: 30s
+    networks:
+      - agentic-csv
+
+networks:
+  agentic-csv:
+    driver: bridge
+
+volumes:
+  postgres-data:
+  redis-data:
+  qdrant-data:
+  localstack-data:
