@@ -13,6 +13,7 @@ operational contracts. It intentionally avoids the full CSV product.
 
 - Provide a pnpm/Turborepo monorepo with strict TypeScript.
 - Separate web request handling from asynchronous worker processing.
+- Provide a React frontend through Next.js App Router with Tailwind CSS styling.
 - Establish DDD and logical CQRS package boundaries.
 - Prepare PostgreSQL, Redis, Qdrant, LocalStack S3, DuckDB, LangChain, and LangGraph.
 - Validate all boundary data and environment variables.
@@ -37,6 +38,7 @@ operational contracts. It intentionally avoids the full CSV product.
 - Provide S3-compatible storage and Qdrant readiness adapters.
 - Provide an initial LangGraph state and two-node graph scaffold.
 - Provide web `/api/health` and `/api/ready` routes.
+- Provide global Tailwind CSS setup for the web UI without adding a component framework.
 - Provide worker startup, job validation, logging, and graceful shutdown.
 
 ## Non-Functional Requirements
@@ -57,6 +59,7 @@ operational contracts. It intentionally avoids the full CSV product.
 - Web and worker Dockerfiles build.
 - `/api/health` returns 200 when the web process is alive.
 - `/api/ready` returns structured dependency results.
+- The web package can compile React pages styled with Tailwind CSS.
 
 ## Explicit Non-Goals
 

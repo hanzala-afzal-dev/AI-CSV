@@ -1,143 +1,20 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
+  --color-canvas: #f7f8fb;
+  --color-ink: #15202b;
+  --color-muted: #566579;
+  --color-line: #d9e0e8;
+  --color-panel: #ffffff;
+  --color-accent-green: #247a5a;
+  --color-accent-blue: #315f9c;
+  --color-accent-rust: #a14f2f;
+  --color-accent-gold: #a17816;
+}
+
 :root {
   color-scheme: light;
-  --bg: #f7f8fb;
-  --ink: #15202b;
-  --muted: #566579;
-  --line: #d9e0e8;
-  --panel: #ffffff;
-  --green: #247a5a;
-  --blue: #315f9c;
-  --rust: #a14f2f;
-  --gold: #a17816;
-}
-
-* {
-  box-sizing: border-box;
-}
-
-html,
-body {
-  min-height: 100%;
-  margin: 0;
-}
-
-body {
-  background: var(--bg);
-  color: var(--ink);
-  font-family:
-    Inter,
-    ui-sans-serif,
-    system-ui,
-    -apple-system,
-    BlinkMacSystemFont,
-    "Segoe UI",
-    sans-serif;
-}
-
-.shell {
-  width: min(1120px, calc(100% - 32px));
-  margin: 0 auto;
-  padding: 56px 0;
-}
-
-.intro {
-  display: grid;
-  grid-template-columns: minmax(0, 1.3fr) minmax(280px, 0.7fr);
-  gap: 32px;
-  align-items: end;
-  padding-bottom: 40px;
-  border-bottom: 1px solid var(--line);
-}
-
-.eyebrow {
-  margin: 0 0 14px;
-  color: var(--green);
-  font-size: 0.82rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0;
-}
-
-h1 {
-  max-width: 780px;
-  margin: 0;
-  font-size: clamp(2.5rem, 6vw, 5.6rem);
-  line-height: 0.95;
-  letter-spacing: 0;
-}
-
-.lede {
-  max-width: 720px;
-  margin: 24px 0 0;
-  color: var(--muted);
-  font-size: 1.08rem;
-  line-height: 1.65;
-}
-
-.statusPanel {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  align-content: flex-end;
-}
-
-.statusPanel span {
-  border: 1px solid var(--line);
-  border-left: 4px solid var(--blue);
-  background: var(--panel);
-  padding: 10px 12px;
-  font-size: 0.92rem;
-  font-weight: 650;
-}
-
-.statusPanel span:nth-child(2n) {
-  border-left-color: var(--green);
-}
-
-.statusPanel span:nth-child(3n) {
-  border-left-color: var(--rust);
-}
-
-.statusPanel span:nth-child(4n) {
-  border-left-color: var(--gold);
-}
-
-.boundaryGrid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 16px;
-  padding-top: 28px;
-}
-
-.boundary {
-  min-height: 172px;
-  border: 1px solid var(--line);
-  background: var(--panel);
-  padding: 18px;
-}
-
-.boundary h2 {
-  margin: 0 0 12px;
-  font-size: 1rem;
-}
-
-.boundary p {
-  margin: 0;
-  color: var(--muted);
-  line-height: 1.55;
-}
-
-@media (max-width: 820px) {
-  .shell {
-    width: min(100% - 24px, 640px);
-    padding: 34px 0;
-  }
-
-  .intro {
-    grid-template-columns: 1fr;
-  }
-
-  .boundaryGrid {
-    grid-template-columns: 1fr;
-  }
 }

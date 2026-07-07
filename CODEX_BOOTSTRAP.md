@@ -275,6 +275,7 @@ Use:
 - Turborepo
 - Next.js App Router
 - React
+- Tailwind CSS
 - TypeScript strict mode
 - Zod
 - PostgreSQL
@@ -791,7 +792,7 @@ Create:
 - a polished but minimal landing page explaining the project architecture
 - `GET /api/health` for liveness
 - `GET /api/ready` for dependency readiness
-- global styling without requiring a large UI framework
+- Tailwind CSS global styling without adding a component framework
 - metadata and semantic HTML
 - Server Components by default
 

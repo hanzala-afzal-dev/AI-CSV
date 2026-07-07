@@ -7,7 +7,7 @@ Business rules live in package boundaries rather than route handlers.
 
 ```mermaid
 flowchart LR
-  Web[Next.js web] --> App[Application CQRS]
+  Web[Next.js React web + Tailwind] --> App[Application CQRS]
   Worker[BullMQ worker] --> App
   App --> Domain[Domain]
   Web --> Infra[Infrastructure]
@@ -29,6 +29,12 @@ flowchart LR
 - Web and worker compose dependencies for delivery.
 - Contracts are framework-neutral Zod schemas.
 - Agent contains LangGraph state and graph composition only.
+
+## Frontend Layer
+
+`apps/web` is a React frontend delivered through Next.js App Router. It uses Server
+Components by default, keeps route handlers thin, and uses Tailwind CSS for application
+styling without introducing a component framework.
 
 ## Liveness and Readiness
 

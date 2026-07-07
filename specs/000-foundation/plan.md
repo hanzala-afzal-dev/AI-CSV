@@ -16,7 +16,8 @@ state and graph composition. Infrastructure owns external clients and readiness 
 
 ## Repository Plan
 
-- `apps/web`: Next.js App Router, health/readiness routes, minimal landing page.
+- `apps/web`: Next.js App Router, React UI, Tailwind CSS styling,
+  health/readiness routes, minimal landing page.
 - `apps/worker`: BullMQ workers and processors.
 - `packages/domain`: aggregate roots, domain errors, value objects, dataset aggregate.
 - `packages/application`: CQRS buses, application ports, command handlers.
@@ -48,6 +49,9 @@ Pure domain and application seams are covered by Vitest. Infrastructure tests fo
 pure validation logic and rate-limiter command construction where possible. Full
 dependency readiness is validated through Docker Compose in local or CI-capable
 environments.
+
+The web package must pass lint, typecheck, formatting, and production build checks after
+frontend styling changes.
 
 ## Migration Strategy
 

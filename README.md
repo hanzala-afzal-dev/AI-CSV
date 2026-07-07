@@ -13,7 +13,7 @@ specifications.
 
 ```mermaid
 flowchart LR
-  Web[apps/web Next.js] --> App[packages/application CQRS]
+  Web[apps/web Next.js + React + Tailwind] --> App[packages/application CQRS]
   Worker[apps/worker BullMQ] --> App
   App --> Domain[packages/domain]
   Web --> Infra[packages/infrastructure]
@@ -34,7 +34,8 @@ Domain <- Application <- Infrastructure <- Web / Worker
 
 ## Repository Map
 
-- `apps/web`: Next.js App Router UI and `/api/health`, `/api/ready`.
+- `apps/web`: Next.js App Router React UI, Tailwind CSS styling, and `/api/health`,
+  `/api/ready`.
 - `apps/worker`: BullMQ worker process and dataset ingestion processor scaffold.
 - `packages/domain`: dataset aggregate, value objects, domain events, errors.
 - `packages/application`: CQRS buses, ports, and initial dataset command.
@@ -85,6 +86,21 @@ Local service URLs:
 - Qdrant REST/dashboard: `http://localhost:6333`
 - Qdrant gRPC: `localhost:6334`
 - LocalStack: `http://localhost:4566`
+
+## Frontend Development
+
+The frontend lives in `apps/web`. It uses React through Next.js App Router and
+Tailwind CSS v4 for styling.
+
+```bash
+pnpm --filter @agentic-csv/web dev
+```
+
+The package-level dev script uses port `3000`. If that port is already busy, run:
+
+```bash
+pnpm --filter @agentic-csv/web exec next dev --port 3001
+```
 
 ## Fully Containerized Workflow
 

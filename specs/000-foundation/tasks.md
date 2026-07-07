@@ -17,6 +17,7 @@
 - [x] Add DuckDB readiness foundation.
 - [x] Add Pino structured logging.
 - [x] Add Next.js web app and health/readiness endpoints.
+- [x] Configure Tailwind CSS for the React web frontend.
 - [x] Add LangGraph package scaffold.
 - [x] Add knowledge-base policies, glossary, and example.
 - [x] Add Dockerfiles, Compose, init scripts, and Makefile.
