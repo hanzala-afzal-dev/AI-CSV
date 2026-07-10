@@ -26,13 +26,14 @@ export async function POST(
     const { datasetId } = await params;
     const body = initiateDatasetUploadRequestSchema.parse(await readJson(request));
     const result = await handler.execute({
-      ownerId: context.principal.ownerId,
+      userId: context.principal.userId,
       datasetId,
       ...body
     });
     return successResponse(
       {
         uploadIntentId: result.uploadIntentId,
+        datasetVersionId: result.datasetVersionId,
         objectKey: result.objectKey,
         uploadUrl: result.uploadUrl,
         method: result.method,

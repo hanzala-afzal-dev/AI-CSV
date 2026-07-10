@@ -11,7 +11,7 @@ export interface DatasetProfileStats {
 
 export interface DatasetProps {
   readonly id: DatasetId;
-  readonly ownerId: string;
+  readonly userId: string;
   readonly name: string;
   readonly originalFilename: string;
   readonly objectKey: string | null;
@@ -29,7 +29,7 @@ export class Dataset extends AggregateRoot {
   }
 
   public static create(input: {
-    ownerId: string;
+    userId: string;
     name: string;
     originalFilename: string;
     id?: DatasetId;
@@ -37,7 +37,7 @@ export class Dataset extends AggregateRoot {
     const now = new Date();
     const dataset = new Dataset({
       id: input.id ?? DatasetId.create(),
-      ownerId: requireNonBlank(input.ownerId, "Owner ID is required."),
+      userId: requireNonBlank(input.userId, "User ID is required."),
       name: normalizeDatasetName(input.name),
       originalFilename: requireNonBlank(
         input.originalFilename,
@@ -57,7 +57,7 @@ export class Dataset extends AggregateRoot {
         aggregateId: dataset.id.toString(),
         name: "dataset.created",
         payload: {
-          ownerId: dataset.ownerId,
+          userId: dataset.userId,
           name: dataset.name,
           originalFilename: dataset.originalFilename
         }
@@ -71,7 +71,7 @@ export class Dataset extends AggregateRoot {
     return new Dataset({
       ...props,
       name: normalizeDatasetName(props.name),
-      ownerId: requireNonBlank(props.ownerId, "Owner ID is required."),
+      userId: requireNonBlank(props.userId, "User ID is required."),
       originalFilename: requireNonBlank(
         props.originalFilename,
         "Original filename is required."
@@ -83,8 +83,8 @@ export class Dataset extends AggregateRoot {
     return this.props.id;
   }
 
-  public get ownerId(): string {
-    return this.props.ownerId;
+  public get userId(): string {
+    return this.props.userId;
   }
 
   public get name(): string {
@@ -131,7 +131,7 @@ export class Dataset extends AggregateRoot {
       createDomainEvent({
         aggregateId: this.id.toString(),
         name: "dataset.uploaded",
-        payload: { ownerId: this.ownerId, objectKey: this.props.objectKey }
+        payload: { userId: this.userId, objectKey: this.props.objectKey }
       })
     );
   }
@@ -150,7 +150,7 @@ export class Dataset extends AggregateRoot {
       createDomainEvent({
         aggregateId: this.id.toString(),
         name: "dataset.upload_retried",
-        payload: { ownerId: this.ownerId }
+        payload: { userId: this.userId }
       })
     );
   }
@@ -161,7 +161,7 @@ export class Dataset extends AggregateRoot {
       createDomainEvent({
         aggregateId: this.id.toString(),
         name: "dataset.profiling_started",
-        payload: { ownerId: this.ownerId }
+        payload: { userId: this.userId }
       })
     );
   }
@@ -181,7 +181,7 @@ export class Dataset extends AggregateRoot {
         aggregateId: this.id.toString(),
         name: "dataset.ready",
         payload: {
-          ownerId: this.ownerId,
+          userId: this.userId,
           rowCount: stats.rowCount,
           columnCount: stats.columnCount
         }
@@ -211,7 +211,7 @@ export class Dataset extends AggregateRoot {
       createDomainEvent({
         aggregateId: this.id.toString(),
         name: "dataset.failed",
-        payload: { ownerId: this.ownerId, reason: normalizedReason }
+        payload: { userId: this.userId, reason: normalizedReason }
       })
     );
   }

@@ -10,7 +10,7 @@ import { DatasetWorkflowError } from "../workflow-error";
 const operation = "dataset.upload.complete.v1";
 
 export interface CompleteDatasetUploadInput {
-  readonly ownerId: string;
+  readonly userId: string;
   readonly datasetId: string;
   readonly uploadIntentId: string;
   readonly idempotencyKey: string;
@@ -29,9 +29,9 @@ export class CompleteDatasetUploadHandler {
     input: CompleteDatasetUploadInput
   ): Promise<UploadCompletionResponse> {
     const now = input.now ?? new Date();
-    const existing = await this.unitOfWork.execute((transaction) =>
+    const existing = await this.unitOfWork.executeForUser(input.userId, (transaction) =>
       transaction.idempotency.find({
-        ownerId: input.ownerId,
+        userId: input.userId,
         operation,
         key: input.idempotencyKey
       })
@@ -40,8 +40,8 @@ export class CompleteDatasetUploadHandler {
       return resolveExistingIdempotency(existing, input.requestHash);
     }
 
-    const intent = await this.unitOfWork.execute((transaction) =>
-      transaction.uploadIntents.findByIdForOwner(input.uploadIntentId, input.ownerId)
+    const intent = await this.unitOfWork.executeForUser(input.userId, (transaction) =>
+      transaction.uploadIntents.findByIdForUser(input.uploadIntentId, input.userId)
     );
     if (!intent || intent.datasetId !== input.datasetId) {
       throw new DatasetWorkflowError(
@@ -59,9 +59,9 @@ export class CompleteDatasetUploadHandler {
     const metadata = await this.objectStorage.inspectObject(intent.objectKey);
     assertObjectMatchesIntent(metadata, intent);
 
-    return this.unitOfWork.execute(async (transaction) => {
+    return this.unitOfWork.executeForUser(input.userId, async (transaction) => {
       const reservation = await transaction.idempotency.reserve({
-        ownerId: input.ownerId,
+        userId: input.userId,
         operation,
         key: input.idempotencyKey,
         requestHash: input.requestHash,
@@ -71,14 +71,14 @@ export class CompleteDatasetUploadHandler {
         return resolveExistingIdempotency(reservation, input.requestHash);
       }
 
-      const lockedIntent = await transaction.uploadIntents.findByIdForOwner(
+      const lockedIntent = await transaction.uploadIntents.findByIdForUser(
         input.uploadIntentId,
-        input.ownerId,
+        input.userId,
         { forUpdate: true }
       );
-      const dataset = await transaction.datasets.findByIdForOwner(
+      const dataset = await transaction.datasets.findByIdForUser(
         DatasetId.from(input.datasetId),
-        input.ownerId,
+        input.userId,
         { forUpdate: true }
       );
       if (!lockedIntent || lockedIntent.datasetId !== input.datasetId || !dataset) {
@@ -94,25 +94,32 @@ export class CompleteDatasetUploadHandler {
       dataset.markUploaded(lockedIntent.objectKey);
       const events = dataset.pullDomainEvents();
       await transaction.datasets.save(dataset);
+      await transaction.datasetVersions.markUploaded(
+        lockedIntent.datasetVersionId,
+        input.userId,
+        now
+      );
       await transaction.events.publish(events);
       await transaction.uploadIntents.markCompleted(lockedIntent.id, now);
       await transaction.ingestionRequests.publish({
-        schemaVersion: 1,
+        version: 1,
         jobName: "dataset.ingest.v1",
         correlationId: input.correlationId,
-        ownerId: input.ownerId,
+        userId: input.userId,
         datasetId: input.datasetId,
+        datasetVersionId: lockedIntent.datasetVersionId,
         objectKey: lockedIntent.objectKey,
         idempotencyKey: input.idempotencyKey
       });
 
       const response: UploadCompletionResponse = {
         datasetId: input.datasetId,
+        datasetVersionId: lockedIntent.datasetVersionId,
         status: "uploaded",
         ingestionRequested: true
       };
       await transaction.idempotency.complete({
-        ownerId: input.ownerId,
+        userId: input.userId,
         operation,
         key: input.idempotencyKey,
         response,
@@ -149,8 +156,9 @@ function resolveExistingIdempotency(
 function assertObjectMatchesIntent(
   metadata: StoredObjectMetadata,
   intent: {
-    readonly ownerId: string;
+    readonly userId: string;
     readonly datasetId: string;
+    readonly datasetVersionId: string;
     readonly contentType: string;
     readonly sizeBytes: number;
     readonly checksumSha256: string;
@@ -160,8 +168,9 @@ function assertObjectMatchesIntent(
     metadata.sizeBytes === intent.sizeBytes &&
     metadata.contentType?.toLowerCase() === intent.contentType.toLowerCase() &&
     metadata.checksumSha256 === intent.checksumSha256 &&
-    metadata.ownerId === intent.ownerId &&
-    metadata.datasetId === intent.datasetId;
+    metadata.userId === intent.userId &&
+    metadata.datasetId === intent.datasetId &&
+    metadata.datasetVersionId === intent.datasetVersionId;
   if (!matches) {
     throw new DatasetWorkflowError(
       "UPLOAD_OBJECT_METADATA_MISMATCH",

@@ -10,8 +10,8 @@
 - Uploaded cell content must never be treated as system instructions.
 - Long-running work is queued, not performed in request handlers.
 - Model-backed endpoints must use stricter rate limits.
-- Object keys are scoped by owner or tenant and dataset.
-- Future Qdrant retrieval requires owner, tenant, dataset, and version filters.
+- Object keys are scoped by user, dataset, and version.
+- Future Qdrant retrieval requires user, dataset, and compatible-version filters.
 - Future analytical SQL must be read-only and allow-listed.
 - Queue payloads are validated and versioned.
 - Workers must be idempotent and safe to retry.
@@ -20,7 +20,7 @@
 ## Implemented Request Controls
 
 - API keys contain 256 bits of random material and are stored as HMAC-SHA-256 digests.
-- Every mutable dataset lookup is constrained by authenticated owner ID.
+- Every mutable dataset lookup is constrained by authenticated user ID and forced PostgreSQL RLS.
 - Browser mutations require JSON and reject cross-site fetch metadata and untrusted origins.
 - Redis rate limiting is applied before and after authentication and fails closed.
 - Upload completion verifies signed S3 metadata, size, content type, and checksum.

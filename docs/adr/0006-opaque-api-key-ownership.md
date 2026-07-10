@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted for Phase 1.
+Superseded for browser authentication by ADR 0008. Retained as a transitional CLI/server adapter.
 
 ## Context
 

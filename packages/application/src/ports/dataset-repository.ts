@@ -2,10 +2,9 @@ import type { Dataset, DatasetId } from "@agentic-csv/domain";
 
 export interface DatasetRepository {
   save(dataset: Dataset): Promise<void>;
-  findById(id: DatasetId): Promise<Dataset | null>;
-  findByIdForOwner(
+  findByIdForUser(
     id: DatasetId,
-    ownerId: string,
+    userId: string,
     options?: { readonly forUpdate?: boolean }
   ): Promise<Dataset | null>;
 }

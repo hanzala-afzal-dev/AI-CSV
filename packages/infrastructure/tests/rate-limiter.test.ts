@@ -25,7 +25,7 @@ describe("RedisRateLimiter", () => {
     const limiter = new RedisRateLimiter(redis, "agentic-csv");
 
     const decision = await limiter.check({
-      key: "api:owner_1",
+      key: "api:user_1",
       limit: 5,
       windowSeconds: 60,
       now: new Date(1000 * 1000)
@@ -37,7 +37,7 @@ describe("RedisRateLimiter", () => {
       remaining: 4,
       resetAt: new Date(1006 * 1000)
     });
-    expect(redis.calls[0]?.keys[0]).toBe("agentic-csv:rate-limit:api:owner_1");
+    expect(redis.calls[0]?.keys[0]).toBe("agentic-csv:rate-limit:api:user_1");
   });
 
   it("rejects unexpected Redis script responses", async () => {
@@ -45,7 +45,7 @@ describe("RedisRateLimiter", () => {
 
     await expect(
       limiter.check({
-        key: "api:owner_1",
+        key: "api:user_1",
         limit: 5,
         windowSeconds: 60,
         now: new Date()
@@ -58,7 +58,7 @@ describe("RedisRateLimiter", () => {
     const limiter = new RedisRateLimiter(redis, "agentic-csv");
 
     await expect(
-      limiter.check({ key: "api:owner_1", limit: 0, windowSeconds: 60, now: new Date() })
+      limiter.check({ key: "api:user_1", limit: 0, windowSeconds: 60, now: new Date() })
     ).rejects.toThrow("Invalid rate-limit input");
     expect(redis.calls).toHaveLength(0);
   });

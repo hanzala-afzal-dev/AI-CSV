@@ -5,48 +5,51 @@ import {
   createDatabaseClient,
   createPgPool
 } from "../packages/infrastructure/src/database/client";
-import { apiKeys, owners } from "../packages/infrastructure/drizzle/schema";
+import { apiKeys, users } from "../packages/infrastructure/drizzle/schema";
 
 const { values } = parseArgs({
   options: {
-    "owner-name": { type: "string" },
+    "user-name": { type: "string" },
     "key-name": { type: "string", default: "local-development" }
   }
 });
 
-const ownerName = values["owner-name"]?.trim();
+const userName = values["user-name"]?.trim();
 const keyName = values["key-name"]?.trim();
-if (!ownerName || !keyName) {
-  console.error("Usage: pnpm auth:key:create --owner-name <name> [--key-name <name>]");
+if (!userName || !keyName) {
+  console.error("Usage: pnpm auth:key:create --user-name <name> [--key-name <name>]");
   process.exit(1);
 }
 
 async function main(): Promise<void> {
   const env = loadEnv();
-  const pool = createPgPool(env);
+  const pool = createPgPool({
+    ...env,
+    DATABASE_URL: process.env.MIGRATION_DATABASE_URL ?? env.DATABASE_URL
+  });
   const database = createDatabaseClient(pool);
 
   try {
     const result = await database.transaction(async (transaction) => {
-      const createdOwners = await transaction
-        .insert(owners)
-        .values({ displayName: ownerName })
-        .returning({ id: owners.id });
-      const owner = createdOwners[0];
-      if (!owner) {
-        throw new Error("Owner creation returned no row.");
+      const createdUsers = await transaction
+        .insert(users)
+        .values({ displayName: userName })
+        .returning({ id: users.id });
+      const user = createdUsers[0];
+      if (!user) {
+        throw new Error("User creation returned no row.");
       }
       const generated = generateApiKey(env.AUTH_SECRET);
       await transaction.insert(apiKeys).values({
-        ownerId: owner.id,
+        userId: user.id,
         name: keyName,
         keyPrefix: generated.keyPrefix,
         keyHash: generated.keyHash
       });
-      return { ownerId: owner.id, apiKey: generated.plaintext };
+      return { userId: user.id, apiKey: generated.plaintext };
     });
 
-    console.log(`Owner ID: ${result.ownerId}`);
+    console.log(`User ID: ${result.userId}`);
     console.log(`API key (shown once): ${result.apiKey}`);
   } finally {
     await pool.end();

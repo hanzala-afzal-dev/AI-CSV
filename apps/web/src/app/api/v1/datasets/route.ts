@@ -19,7 +19,7 @@ export async function POST(request: Request) {
     const result = await handler.execute({
       type: "dataset.create.v1",
       correlationId: context.correlationId,
-      ownerId: context.principal.ownerId,
+      userId: context.principal.userId,
       name: body.name,
       originalFilename: body.originalFilename
     });
@@ -27,7 +27,7 @@ export async function POST(request: Request) {
     return successResponse(
       {
         id: result.datasetId,
-        ownerId: result.ownerId,
+        userId: result.userId,
         name: result.name,
         originalFilename: result.originalFilename,
         objectKey: null,

@@ -3,7 +3,7 @@ import type { AgentAnalysisStateContract } from "@agentic-csv/contracts";
 
 export const AnalysisStateAnnotation = Annotation.Root({
   correlationId: Annotation<string>(),
-  ownerId: Annotation<string>(),
+  userId: Annotation<string>(),
   datasetId: Annotation<string>(),
   datasetVersion: Annotation<number | undefined>(),
   question: Annotation<string>(),

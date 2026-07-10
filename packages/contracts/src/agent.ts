@@ -2,7 +2,7 @@ import { z } from "zod";
 
 export const agentAnalysisStateSchema = z.object({
   correlationId: z.string().min(1),
-  ownerId: z.string().min(1),
+  userId: z.string().min(1),
   datasetId: z.string().uuid(),
   datasetVersion: z.number().int().positive().optional(),
   question: z.string().min(1),

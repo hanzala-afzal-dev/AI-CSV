@@ -112,6 +112,8 @@ services:
     profiles: ["app"]
     image: agentic-csv-analyst-worker
     command: ["./node_modules/.bin/drizzle-kit", "migrate"]
+    environment:
+      DATABASE_URL: "postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}"
     depends_on:
       postgres:
         condition: service_healthy
