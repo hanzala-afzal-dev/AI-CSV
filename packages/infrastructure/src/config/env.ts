@@ -8,7 +8,13 @@ const booleanFromString = z.preprocess((value) => {
     return value;
   }
   if (typeof value === "string") {
-    return value.toLowerCase() === "true";
+    const normalized = value.trim().toLowerCase();
+    if (normalized === "true") {
+      return true;
+    }
+    if (normalized === "false") {
+      return false;
+    }
   }
   return value;
 }, z.boolean());
@@ -58,6 +64,7 @@ export const envSchema = z.object({
 
   LOCALSTACK_PORT: integerFromString(z.number().min(1).max(65535)),
   S3_ENDPOINT: z.string().url(),
+  S3_PUBLIC_ENDPOINT: z.preprocess(emptyStringAsUndefined, z.string().url().optional()),
   S3_REGION: z.string().min(1),
   S3_BUCKET: z.string().min(3),
   S3_ACCESS_KEY_ID: z.string().min(1),

@@ -13,18 +13,22 @@
     "test:coverage": "vitest run tests/*.test.ts --coverage --passWithNoTests"
   },
   "dependencies": {
+    "@agentic-csv/application": "workspace:*",
+    "@agentic-csv/contracts": "workspace:*",
+    "@agentic-csv/domain": "workspace:*",
     "@agentic-csv/infrastructure": "workspace:*",
     "next": "16.2.10",
     "react": "19.2.7",
-    "react-dom": "19.2.7"
+    "react-dom": "19.2.7",
+    "zod": "4.4.3"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "^4.3.2",
+    "@tailwindcss/postcss": "4.3.2",
     "@types/node": "26.1.0",
     "@types/react": "19.2.17",
     "@types/react-dom": "19.2.3",
-    "postcss": "^8.5.16",
-    "tailwindcss": "^4.3.2",
+    "postcss": "8.5.16",
+    "tailwindcss": "4.3.2",
     "typescript": "6.0.3",
     "vitest": "4.1.10"
   }

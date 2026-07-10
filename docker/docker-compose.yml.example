@@ -86,7 +86,11 @@ services:
       dockerfile: docker/Dockerfile.web
     ports:
       - "${APP_PORT}:3000"
+    environment:
+      S3_PUBLIC_ENDPOINT: "http://localhost:${LOCALSTACK_PORT}"
     depends_on:
+      migrate:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       redis:
@@ -103,13 +107,27 @@ services:
     networks:
       - agentic-csv
 
+  migrate:
+    <<: *env-files
+    profiles: ["app"]
+    image: agentic-csv-analyst-worker
+    command: ["./node_modules/.bin/drizzle-kit", "migrate"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - agentic-csv
+
   worker:
     <<: *env-files
     profiles: ["app"]
     build:
       context: ..
       dockerfile: docker/Dockerfile.worker
+    image: agentic-csv-analyst-worker
     depends_on:
+      migrate:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       redis:

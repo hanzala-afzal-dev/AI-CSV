@@ -1,13 +1,12 @@
 # Agentic CSV Analyst
 
-Production-minded foundation for an Agentic CSV Analyst. The product direction is:
+Production-minded implementation of an Agentic CSV Analyst. The product direction is:
 
 > The LLM plans and explains. Deterministic tools calculate. RAG retrieves semantic
 > context.
 
-This repository currently implements the foundation phase only. CSV upload, ingestion,
-profiling, RAG indexing, and conversational analysis are intentionally deferred to later
-specifications.
+The foundation and secure direct CSV upload workflow are implemented. Dataset profiling,
+RAG indexing, and conversational analysis remain specification-driven follow-up work.
 
 ## Architecture
 
@@ -34,17 +33,19 @@ Domain <- Application <- Infrastructure <- Web / Worker
 
 ## Repository Map
 
-- `apps/web`: Next.js App Router React UI, Tailwind CSS styling, and `/api/health`,
-  `/api/ready`.
-- `apps/worker`: BullMQ worker process and dataset ingestion processor scaffold.
+- `apps/web`: Next.js App Router UI, health/readiness routes, authenticated dataset APIs,
+  CSRF defenses, and rate-limit composition.
+- `apps/worker`: BullMQ worker, validated ingestion processor, and transactional outbox
+  dispatcher.
 - `packages/domain`: dataset aggregate, value objects, domain events, errors.
-- `packages/application`: CQRS buses, ports, and initial dataset command.
+- `packages/application`: CQRS buses, transactional ports, and CSV upload workflow.
 - `packages/contracts`: shared Zod API, queue, dataset, and agent contracts.
 - `packages/infrastructure`: env, Drizzle, Redis, BullMQ, S3, Qdrant, DuckDB, logging,
   rate limiting, readiness.
 - `packages/agent`: LangGraph state and placeholder analysis graph.
 - `knowledge-base`: version-controlled policies, glossary, and example documents.
-- `specs`: constitution, foundation spec, and next CSV upload spec.
+- `specs`: constitution, completed foundation/upload specifications, and the next profiling
+  specification.
 - `docs/adr`: architecture decision records.
 
 ## Prerequisites
@@ -57,6 +58,9 @@ Domain <- Application <- Infrastructure <- Web / Worker
 
 ```bash
 corepack enable
+cp .env.example .env
+cp docker/.env.example docker/.env
+cp docker/docker-compose.yml.example docker/docker-compose.yml
 pnpm install
 pnpm env:check
 pnpm format:check
@@ -66,21 +70,16 @@ pnpm test
 pnpm build
 ```
 
-Use `.env` as the project-level source of truth. Start from `.env.example` when
-resetting local values. Docker-only overrides live in `docker/.env`; start from
-`docker/.env.example` when resetting those values. Both `.env` files are ignored.
-The local Compose file is also ignored; create it from the tracked template:
-
-```bash
-cp docker/docker-compose.yml.example docker/docker-compose.yml
-```
+Use `.env` as the project-level source of truth. Docker-only overrides live in
+`docker/.env`. Both local files and the rendered Compose file are ignored; their tracked
+examples are the reset source.
 
 ## Infrastructure-Only Development
 
 ```bash
 pnpm infra:up
-pnpm db:generate
 pnpm db:migrate
+pnpm auth:key:create --owner-name "Local developer"
 pnpm infra:down
 ```
 
@@ -109,10 +108,8 @@ pnpm --filter @agentic-csv/web exec next dev --port 3001
 
 ## Fully Containerized Workflow
 
-The local Compose file is `docker/docker-compose.yml`, created from
-`docker/docker-compose.yml.example`. Root scripts already pass that path.
-`docker-compose.yml.example` is an optional wrapper if you want root-level Compose
-auto-discovery.
+The local Compose file is `docker/docker-compose.yml`, created from its tracked example.
+Root scripts already pass that path.
 
 Validate Compose:
 
@@ -120,7 +117,7 @@ Validate Compose:
 docker compose --env-file .env -f docker/docker-compose.yml --profile app config
 ```
 
-Build application images:
+Build application images (the worker image also runs the one-shot migration service):
 
 ```bash
 docker compose --env-file .env -f docker/docker-compose.yml --profile app build web worker
@@ -133,6 +130,9 @@ docker compose --env-file .env -f docker/docker-compose.yml --profile app up -d 
 docker compose --env-file .env -f docker/docker-compose.yml --profile app ps
 docker compose --env-file .env -f docker/docker-compose.yml --profile app logs -f --tail=200
 ```
+
+The `migrate` service applies committed Drizzle migrations after PostgreSQL becomes healthy. Web
+and worker processes start only after migration succeeds.
 
 Stop while preserving data:
 
@@ -161,6 +161,35 @@ should not be proxied through Next.js request handlers.
 
 LocalStack creates the development bucket from `docker/localstack/init`.
 
+## Authentication and CSV Upload API
+
+Phase 1 uses opaque bearer API keys. Only an HMAC of each key is stored in PostgreSQL;
+the plaintext is printed once by the creation command. API keys are appropriate for this
+API-first slice. A later interactive browser client must use a dedicated session/OAuth
+flow rather than persist API keys in browser storage.
+
+After applying migrations, create an owner and API key:
+
+```bash
+pnpm auth:key:create --owner-name "Local developer" --key-name "local-cli"
+export CSV_API_KEY='the-key-printed-once'
+```
+
+Mutation endpoints require `Authorization: Bearer ...`, `Content-Type: application/json`,
+and same-origin browser requests. Upload completion additionally requires an
+`Idempotency-Key` header.
+
+```text
+POST /api/v1/datasets
+POST /api/v1/datasets/{datasetId}/upload
+POST /api/v1/datasets/{datasetId}/upload/complete
+```
+
+Upload initiation requires the exact byte size, content type, and base64 SHA-256 checksum.
+The returned `PUT` URL must be called with every returned `requiredHeaders` entry. Completion
+verifies S3 size, media type, checksum, owner, and dataset metadata before atomically changing
+dataset state and writing the ingestion request to the outbox.
+
 ## Environment Strategy
 
 Raw environment parsing is centralized in `packages/infrastructure/src/config/env.ts`.
@@ -178,14 +207,14 @@ pnpm typecheck
 pnpm test
 pnpm test:coverage
 pnpm build
-pnpm ci
+pnpm run ci
 ```
 
 ## Specification Workflow
 
 Start with `specs/constitution.md`, then read the active feature spec. Foundation work is
-tracked in `specs/000-foundation`. The next implementation target is
-`specs/001-csv-upload/spec.md`.
+tracked in `specs/000-foundation`; CSV upload is tracked in `specs/001-csv-upload`. The
+next implementation target is `specs/002-dataset-profiling/spec.md`.
 
 ## Design Constraints
 
@@ -196,12 +225,12 @@ tracked in `specs/000-foundation`. The next implementation target is
 - Do not replace Qdrant with pgvector.
 - Do not execute arbitrary model-generated SQL.
 - Do not run long ingestion or profiling jobs in web requests.
+- Never interpolate user input into SQL. Use validated contracts and parameterized Drizzle
+  queries.
 
 ## Deferred Work
 
-- Real authentication and ownership source.
-- CSV upload API and presigned upload flow.
-- Upload completion and ingestion enqueueing.
 - CSV profiling and DuckDB analytical execution.
+- Interactive OAuth/session authentication for a browser product.
 - RAG ingestion and Qdrant document indexing.
 - Production LLM prompts and chart validation.

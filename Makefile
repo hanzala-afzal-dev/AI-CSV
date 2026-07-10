@@ -61,4 +61,4 @@ docker-reset:
 	pnpm docker:reset
 
 ci:
-	pnpm ci
+	pnpm run ci
