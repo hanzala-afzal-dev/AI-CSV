@@ -64,6 +64,15 @@ importers:
 
   apps/web:
     dependencies:
+      "@agentic-csv/application":
+        specifier: workspace:*
+        version: link:../../packages/application
+      "@agentic-csv/contracts":
+        specifier: workspace:*
+        version: link:../../packages/contracts
+      "@agentic-csv/domain":
+        specifier: workspace:*
+        version: link:../../packages/domain
       "@agentic-csv/infrastructure":
         specifier: workspace:*
         version: link:../../packages/infrastructure
@@ -76,9 +85,12 @@ importers:
       react-dom:
         specifier: 19.2.7
         version: 19.2.7(react@19.2.7)
+      zod:
+        specifier: 4.4.3
+        version: 4.4.3
     devDependencies:
       "@tailwindcss/postcss":
-        specifier: ^4.3.2
+        specifier: 4.3.2
         version: 4.3.2
       "@types/node":
         specifier: 26.1.0
@@ -90,10 +102,10 @@ importers:
         specifier: 19.2.3
         version: 19.2.3(@types/react@19.2.17)
       postcss:
-        specifier: ^8.5.16
+        specifier: 8.5.16
         version: 8.5.16
       tailwindcss:
-        specifier: ^4.3.2
+        specifier: 4.3.2
         version: 4.3.2
       typescript:
         specifier: 6.0.3
@@ -160,6 +172,9 @@ importers:
 
   packages/application:
     dependencies:
+      "@agentic-csv/contracts":
+        specifier: workspace:*
+        version: link:../contracts
       "@agentic-csv/domain":
         specifier: workspace:*
         version: link:../domain
@@ -212,6 +227,9 @@ importers:
       "@agentic-csv/contracts":
         specifier: workspace:*
         version: link:../contracts
+      "@agentic-csv/domain":
+        specifier: workspace:*
+        version: link:../domain
       "@aws-sdk/client-s3":
         specifier: 3.1080.0
         version: 3.1080.0
@@ -6201,7 +6219,7 @@ snapshots:
       obug: 2.1.3
       std-env: 4.1.0
       tinyrainbow: 3.1.0
-      vitest: 4.1.10(@types/node@26.1.0)(@vitest/coverage-v8@4.1.10)(vite@8.1.3(@types/node@26.1.0)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.0))
+      vitest: 4.1.10(@types/node@26.1.0)(@vitest/coverage-v8@4.1.10)(vite@8.1.3(@types/node@26.1.0)(esbuild@0.27.7)(jiti@2.7.0)(tsx@4.23.0))
 
   "@vitest/expect@4.1.10":
     dependencies:

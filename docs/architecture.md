@@ -50,6 +50,33 @@ Web requests should stay short. Ingestion, profiling, embedding, and outbox publ
 belong in queues. The worker validates every job payload before doing work and shuts
 down cleanly on `SIGTERM` and `SIGINT`.
 
+## Identity and Request Security
+
+Phase 1 authenticates API clients with opaque bearer keys. PostgreSQL stores only an HMAC
+of each key and resolves it to an owner ID. Every dataset and upload query includes that
+owner ID; knowing a dataset UUID is insufficient for access. Bearer headers are not ambient
+browser credentials, and mutation routes additionally reject cross-site fetch metadata,
+untrusted origins, and non-JSON content types. This protects the current API from CSRF while
+leaving interactive OAuth/session authentication as an explicit later decision.
+
+Redis applies a global pre-authentication ceiling, a credential-bucket limit, and an owner-scoped
+limit. The global ceiling bounds invalid-key rotation while the credential limit contains one key.
+AI routes use the separately configured stricter policy. Protection fails closed when Redis cannot
+initialize.
+
+Zod validates external shapes and Drizzle parameterizes relational queries. User input is
+never concatenated into SQL. Future analytical SQL has a separate read-only, allow-listed
+contract defined by the profiling specification.
+
+## Upload Transaction
+
+Upload initiation creates an expiring intent containing the expected S3 key, byte size,
+media type, and checksum. Completion verifies the stored object before a PostgreSQL
+transaction locks owner-scoped records. Dataset state, domain events, upload completion,
+idempotency response, and an ingestion outbox event commit together. The worker publishes
+that outbox event to BullMQ with a deterministic job ID, so a crash between enqueue and
+outbox acknowledgement does not create duplicate work.
+
 ## DuckDB Placement
 
 DuckDB is embedded in the worker because it is an in-process analytical engine, not a

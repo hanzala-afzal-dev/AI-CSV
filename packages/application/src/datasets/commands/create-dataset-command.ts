@@ -1,13 +1,18 @@
 import { Dataset } from "@agentic-csv/domain";
+import type { DatasetStatus } from "@agentic-csv/domain";
 import type { Command, CommandHandler } from "../../cqrs/command";
-import type { DatasetRepository } from "../../ports/dataset-repository";
-import type { EventPublisher } from "../../ports/event-publisher";
+import type { UnitOfWork } from "../../ports/unit-of-work";
 
 export const createDatasetCommandType = "dataset.create.v1";
 
 export interface CreateDatasetResult {
   readonly datasetId: string;
-  readonly status: string;
+  readonly ownerId: string;
+  readonly name: string;
+  readonly originalFilename: string;
+  readonly status: DatasetStatus;
+  readonly createdAt: Date;
+  readonly updatedAt: Date;
 }
 
 export interface CreateDatasetCommand extends Command<CreateDatasetResult> {
@@ -21,10 +26,7 @@ export class CreateDatasetCommandHandler implements CommandHandler<
   CreateDatasetCommand,
   CreateDatasetResult
 > {
-  public constructor(
-    private readonly repository: DatasetRepository,
-    private readonly eventPublisher: EventPublisher
-  ) {}
+  public constructor(private readonly unitOfWork: UnitOfWork) {}
 
   public async execute(command: CreateDatasetCommand): Promise<CreateDatasetResult> {
     const dataset = Dataset.create({
@@ -34,12 +36,19 @@ export class CreateDatasetCommandHandler implements CommandHandler<
     });
 
     const events = dataset.pullDomainEvents();
-    await this.repository.save(dataset);
-    await this.eventPublisher.publish(events);
+    await this.unitOfWork.execute(async (transaction) => {
+      await transaction.datasets.save(dataset);
+      await transaction.events.publish(events);
+    });
 
     return {
       datasetId: dataset.id.toString(),
-      status: dataset.status
+      ownerId: dataset.ownerId,
+      name: dataset.name,
+      originalFilename: dataset.originalFilename,
+      status: dataset.status,
+      createdAt: dataset.toPrimitives().createdAt,
+      updatedAt: dataset.toPrimitives().updatedAt
     };
   }
 }

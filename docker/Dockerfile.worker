@@ -14,7 +14,7 @@ RUN pnpm install --frozen-lockfile
 
 FROM deps AS builder
 COPY . .
-RUN pnpm build
+RUN pnpm turbo build --filter=@agentic-csv/worker...
 
 FROM node:22-alpine AS runner
 ENV NODE_ENV=production
@@ -24,6 +24,7 @@ RUN addgroup --system --gid 1001 nodejs \
 COPY --from=builder --chown=worker:nodejs /app/package.json ./package.json
 COPY --from=builder --chown=worker:nodejs /app/pnpm-lock.yaml ./pnpm-lock.yaml
 COPY --from=builder --chown=worker:nodejs /app/pnpm-workspace.yaml ./pnpm-workspace.yaml
+COPY --from=builder --chown=worker:nodejs /app/drizzle.config.ts ./drizzle.config.ts
 COPY --from=builder --chown=worker:nodejs /app/node_modules ./node_modules
 COPY --from=builder --chown=worker:nodejs /app/packages ./packages
 COPY --from=builder --chown=worker:nodejs /app/apps/worker ./apps/worker

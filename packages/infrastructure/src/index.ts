@@ -4,6 +4,9 @@ export { createLogger, createSilentLogger, redactionPaths } from "./logging/logg
 export type { AppLogger } from "./logging/logger";
 export { createDatabaseClient, createPgPool } from "./database/client";
 export type { DatabaseClient } from "./database/client";
+export { DrizzleUnitOfWork } from "./database/unit-of-work";
+export { authenticateApiKey, generateApiKey, hashApiKey } from "./auth/api-key";
+export type { ApiPrincipal } from "./auth/api-key";
 export { createBullMqConnectionOptions, createRedisClient } from "./redis/client";
 export type { RedisClient, RedisConnectionOptions } from "./redis/client";
 export {
@@ -13,6 +16,7 @@ export {
   queueOptions
 } from "./queue/queues";
 export type { QueueName } from "./queue/queues";
+export { OutboxDispatcher } from "./queue/outbox-dispatcher";
 export { RedisRateLimiter } from "./rate-limit/rate-limiter";
 export type {
   RateLimitDecision,
