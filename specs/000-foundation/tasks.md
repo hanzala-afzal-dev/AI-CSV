@@ -11,6 +11,7 @@
 - [x] Implement shared Zod contracts.
 - [x] Add typed environment parser.
 - [x] Add Drizzle schema and database client.
+- [x] Commit the initial Drizzle migration.
 - [x] Add Redis, BullMQ queues, and worker processor foundation.
 - [x] Add Redis-backed rate limiter.
 - [x] Add S3-compatible storage adapter.
@@ -22,4 +23,4 @@
 - [x] Add LangGraph package scaffold.
 - [x] Add knowledge-base policies, glossary, and example.
 - [x] Add Dockerfiles, Compose, init scripts, and Makefile.
-- [ ] Run all validation commands in the target environment.
+- [x] Run all validation commands in the target environment.

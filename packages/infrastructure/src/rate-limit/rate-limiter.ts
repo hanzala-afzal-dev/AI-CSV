@@ -15,7 +15,7 @@ export interface RateLimitDecision {
 export interface RedisEvalClient {
   eval(
     script: string,
-    options: { readonly keys: readonly string[]; readonly arguments: readonly string[] }
+    options: { readonly keys: string[]; readonly arguments: string[] }
   ): Promise<unknown>;
 }
 
@@ -40,7 +40,12 @@ end
 redis.call("ZADD", key, now, member)
 redis.call("EXPIRE", key, window)
 count = count + 1
-return {1, limit - count, now + window}
+local oldest = redis.call("ZRANGE", key, 0, 0, "WITHSCORES")
+local reset = now + window
+if oldest[2] then
+  reset = tonumber(oldest[2]) + window
+end
+return {1, limit - count, reset}
 `;
 
 export class RedisRateLimiter {
@@ -50,6 +55,16 @@ export class RedisRateLimiter {
   ) {}
 
   public async check(input: RateLimitInput): Promise<RateLimitDecision> {
+    if (
+      input.key.trim().length === 0 ||
+      !Number.isInteger(input.limit) ||
+      input.limit <= 0 ||
+      !Number.isInteger(input.windowSeconds) ||
+      input.windowSeconds <= 0 ||
+      !Number.isFinite(input.now.getTime())
+    ) {
+      throw new Error("Invalid rate-limit input.");
+    }
     const nowSeconds = Math.floor(input.now.getTime() / 1000);
     const result = await this.redis.eval(script, {
       keys: [`${this.keyPrefix}:rate-limit:${input.key}`],

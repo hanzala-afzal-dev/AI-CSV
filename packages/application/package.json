@@ -17,6 +17,7 @@
     "test:coverage": "vitest run tests/*.test.ts --coverage --passWithNoTests"
   },
   "dependencies": {
+    "@agentic-csv/contracts": "workspace:*",
     "@agentic-csv/domain": "workspace:*"
   },
   "devDependencies": {

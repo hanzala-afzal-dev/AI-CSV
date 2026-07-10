@@ -52,4 +52,14 @@ describe("RedisRateLimiter", () => {
       })
     ).rejects.toThrow("Unexpected Redis rate-limit response");
   });
+
+  it("rejects invalid policy inputs before calling Redis", async () => {
+    const redis = new FakeRedisEvalClient([1, 0, 1000]);
+    const limiter = new RedisRateLimiter(redis, "agentic-csv");
+
+    await expect(
+      limiter.check({ key: "api:owner_1", limit: 0, windowSeconds: 60, now: new Date() })
+    ).rejects.toThrow("Invalid rate-limit input");
+    expect(redis.calls).toHaveLength(0);
+  });
 });

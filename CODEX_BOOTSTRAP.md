@@ -1,5 +1,8 @@
 # Codex Implementation Brief: Production-Grade Agentic CSV Analyst Foundation
 
+> Status: historical foundation contract. Active behavior is defined by `specs/`, ADRs,
+> and the current code. Do not rerun this brief as a replacement for an active feature spec.
+
 ## How to use this file
 
 Give this entire file to Codex and ask it to execute the instructions in the target repository.
@@ -581,6 +584,7 @@ QDRANT_VECTOR_SIZE
 ```text
 LOCALSTACK_PORT
 S3_ENDPOINT
+S3_PUBLIC_ENDPOINT
 S3_REGION
 S3_BUCKET
 S3_ACCESS_KEY_ID

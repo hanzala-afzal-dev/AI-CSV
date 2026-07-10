@@ -5,8 +5,23 @@ export {
   datasetApiRepresentationSchema
 } from "./api";
 export type { ApiError, ApiErrorEnvelope, DatasetApiRepresentation } from "./api";
-export { createDatasetRequestSchema, datasetStatusSchema } from "./dataset";
-export type { CreateDatasetRequest, DatasetStatusContract } from "./dataset";
+export {
+  completeDatasetUploadRequestSchema,
+  createDatasetRequestSchema,
+  datasetStatusSchema,
+  initiateDatasetUploadRequestSchema,
+  uploadCompletionResponseSchema,
+  uploadContentTypeSchema,
+  uploadIntentResponseSchema
+} from "./dataset";
+export type {
+  CompleteDatasetUploadRequest,
+  CreateDatasetRequest,
+  DatasetStatusContract,
+  InitiateDatasetUploadRequest,
+  UploadCompletionResponse,
+  UploadIntentResponse
+} from "./dataset";
 export {
   datasetIngestionJobPayloadSchema,
   knowledgeIndexJobPayloadSchema,

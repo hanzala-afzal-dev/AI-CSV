@@ -11,12 +11,31 @@ export type { EventPublisher } from "./ports/event-publisher";
 export type {
   ObjectStorage,
   PresignedUpload,
-  PresignedUploadRequest
+  PresignedUploadRequest,
+  StoredObjectMetadata
 } from "./ports/object-storage";
+export type {
+  ApplicationTransaction,
+  DatasetUploadIntent,
+  IdempotencyRepository,
+  IdempotencyReservation,
+  IngestionRequestPublisher,
+  UnitOfWork,
+  UploadIntentRepository
+} from "./ports/unit-of-work";
 export {
   CreateDatasetCommandHandler,
   createDatasetCommandType
 } from "./datasets/commands/create-dataset-command";
+export { InitiateDatasetUploadHandler } from "./datasets/commands/initiate-dataset-upload";
+export type {
+  InitiateDatasetUploadInput,
+  InitiateDatasetUploadResult
+} from "./datasets/commands/initiate-dataset-upload";
+export { CompleteDatasetUploadHandler } from "./datasets/commands/complete-dataset-upload";
+export type { CompleteDatasetUploadInput } from "./datasets/commands/complete-dataset-upload";
+export { DatasetWorkflowError } from "./datasets/workflow-error";
+export type { DatasetWorkflowErrorCode } from "./datasets/workflow-error";
 export type {
   CreateDatasetCommand,
   CreateDatasetResult

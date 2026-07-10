@@ -44,6 +44,16 @@ describe("Dataset aggregate", () => {
     expect(() => dataset.startProfiling()).toThrow(DomainError);
   });
 
+  it("does not change state when an upload object key is invalid", () => {
+    const dataset = Dataset.create({ ownerId, name: "Sales", originalFilename });
+    dataset.pullDomainEvents();
+
+    expect(() => dataset.markUploaded("   ")).toThrowError(DomainError);
+    expect(dataset.status).toBe("pending_upload");
+    expect(dataset.objectKey).toBeNull();
+    expect(dataset.peekDomainEvents()).toHaveLength(0);
+  });
+
   it("rejects invalid profiling statistics", () => {
     const dataset = Dataset.create({ ownerId, name: "Sales", originalFilename });
     dataset.markUploaded("owners/owner_123/datasets/abc/sales.csv");
@@ -59,6 +69,17 @@ describe("Dataset aggregate", () => {
     const dataset = Dataset.create({ ownerId, name: "Sales", originalFilename });
 
     expect(() => dataset.markFailed("   ")).toThrow(DomainError);
+  });
+
+  it("can retry an upload after a failure", () => {
+    const dataset = Dataset.create({ ownerId, name: "Sales", originalFilename });
+    dataset.markFailed("upload expired");
+
+    dataset.retryUpload();
+
+    expect(dataset.status).toBe("pending_upload");
+    expect(dataset.failureReason).toBeNull();
+    expect(dataset.peekDomainEvents().at(-1)?.name).toBe("dataset.upload_retried");
   });
 
   it("can rehydrate without emitting events", () => {

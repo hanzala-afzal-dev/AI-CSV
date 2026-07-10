@@ -32,6 +32,7 @@ const validEnv = {
   QDRANT_VECTOR_SIZE: "1536",
   LOCALSTACK_PORT: "4567",
   S3_ENDPOINT: "http://localhost:4567",
+  S3_PUBLIC_ENDPOINT: "http://localhost:4567",
   S3_REGION: "us-east-1",
   S3_BUCKET: "agentic-csv-test",
   S3_ACCESS_KEY_ID: "test",
@@ -70,6 +71,15 @@ describe("parseEnv", () => {
     expect(result.success).toBe(false);
     if (!result.success) {
       expect(result.error.message).toContain("AUTH_SECRET");
+    }
+  });
+
+  it("rejects misspelled boolean values instead of coercing them to false", () => {
+    const result = parseEnv({ ...validEnv, S3_FORCE_PATH_STYLE: "treu" });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.message).toContain("S3_FORCE_PATH_STYLE");
     }
   });
 });

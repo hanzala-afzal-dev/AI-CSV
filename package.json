@@ -19,6 +19,7 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio",
+    "auth:key:create": "node --env-file=.env --import tsx scripts/create-api-key.ts",
     "infra:up": "docker compose --env-file .env -f docker/docker-compose.yml up -d postgres redis qdrant localstack",
     "infra:down": "docker compose --env-file .env -f docker/docker-compose.yml down",
     "infra:reset": "docker compose --env-file .env -f docker/docker-compose.yml down -v --remove-orphans",

@@ -116,10 +116,15 @@ export class Dataset extends AggregateRoot {
   }
 
   public markUploaded(objectKey: string): void {
+    const normalizedObjectKey = requireNonBlank(
+      objectKey,
+      "Object key is required.",
+      "DATASET_OBJECT_KEY_REQUIRED"
+    );
     this.transitionTo("uploaded", ["pending_upload"]);
     this.props = {
       ...this.props,
-      objectKey: requireNonBlank(objectKey, "Object key is required."),
+      objectKey: normalizedObjectKey,
       updatedAt: new Date()
     };
     this.record(
@@ -127,6 +132,25 @@ export class Dataset extends AggregateRoot {
         aggregateId: this.id.toString(),
         name: "dataset.uploaded",
         payload: { ownerId: this.ownerId, objectKey: this.props.objectKey }
+      })
+    );
+  }
+
+  public retryUpload(): void {
+    this.transitionTo("pending_upload", ["failed"]);
+    this.props = {
+      ...this.props,
+      objectKey: null,
+      rowCount: null,
+      columnCount: null,
+      failureReason: null,
+      updatedAt: new Date()
+    };
+    this.record(
+      createDomainEvent({
+        aggregateId: this.id.toString(),
+        name: "dataset.upload_retried",
+        payload: { ownerId: this.ownerId }
       })
     );
   }
@@ -224,7 +248,9 @@ function requireNonBlank(
   value: string,
   message: string,
   code:
-    "DATASET_NAME_INVALID" | "DATASET_FAILURE_REASON_REQUIRED" = "DATASET_NAME_INVALID"
+    | "DATASET_NAME_INVALID"
+    | "DATASET_FAILURE_REASON_REQUIRED"
+    | "DATASET_OBJECT_KEY_REQUIRED" = "DATASET_NAME_INVALID"
 ): string {
   const normalized = value.trim();
   if (normalized.length === 0) {
