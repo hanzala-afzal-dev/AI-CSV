@@ -12,11 +12,11 @@ export async function processDatasetIngestionJob(
     jobId: job.id,
     correlationId: payload.correlationId,
     datasetId: payload.datasetId,
-    ownerId: payload.ownerId
+    userId: payload.userId
   });
 
   childLogger.info("dataset ingestion job validated");
   childLogger.info(
-    "CSV profiling is deferred to specs/001-csv-upload and the later profiling specification"
+    "CSV profiling is deferred to Phase 5 in specs/019-implementation-plan.md"
   );
 }

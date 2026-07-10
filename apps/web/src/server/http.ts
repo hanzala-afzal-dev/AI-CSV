@@ -86,7 +86,7 @@ export async function authorizeMutation(
       ? runtime.env.RATE_LIMIT_AI_MAX_REQUESTS
       : runtime.env.RATE_LIMIT_MAX_REQUESTS;
   const decision = await runtime.rateLimiter.check({
-    key: `${routeClass}:owner:${principal.ownerId}`,
+    key: `${routeClass}:user:${principal.userId}`,
     limit,
     windowSeconds: runtime.env.RATE_LIMIT_WINDOW_SECONDS,
     now: new Date()
@@ -155,9 +155,12 @@ export function errorResponse(
   );
   return NextResponse.json(
     {
-      ok: false,
-      error: { code: mapped.code, message: mapped.message },
-      correlationId
+      error: {
+        code: mapped.code,
+        message: mapped.message,
+        requestId: correlationId,
+        details: {}
+      }
     },
     { status: mapped.status, headers: mapped.headers }
   );
@@ -184,8 +187,20 @@ export function validateMutationRequest(request: Request, trustedOrigin: string)
     );
   }
   const origin = request.headers.get("origin");
+  const referer = request.headers.get("referer");
   if (origin && origin !== trustedOrigin) {
     throw new HttpError(403, "ORIGIN_REJECTED", "Request origin is not trusted.");
+  }
+  if (!origin && referer) {
+    let refererOrigin: string;
+    try {
+      refererOrigin = new URL(referer).origin;
+    } catch {
+      throw new HttpError(403, "REFERER_REJECTED", "Request referer is not trusted.");
+    }
+    if (refererOrigin !== trustedOrigin) {
+      throw new HttpError(403, "REFERER_REJECTED", "Request referer is not trusted.");
+    }
   }
 }
 

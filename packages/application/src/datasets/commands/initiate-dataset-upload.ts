@@ -4,7 +4,7 @@ import type { UnitOfWork } from "../../ports/unit-of-work";
 import { DatasetWorkflowError } from "../workflow-error";
 
 export interface InitiateDatasetUploadInput {
-  readonly ownerId: string;
+  readonly userId: string;
   readonly datasetId: string;
   readonly contentType: string;
   readonly sizeBytes: number;
@@ -13,6 +13,7 @@ export interface InitiateDatasetUploadInput {
 
 export interface InitiateDatasetUploadResult {
   readonly uploadIntentId: string;
+  readonly datasetVersionId: string;
   readonly objectKey: string;
   readonly uploadUrl: string;
   readonly method: "PUT";
@@ -39,8 +40,8 @@ export class InitiateDatasetUploadHandler {
     }
 
     const datasetId = DatasetId.from(input.datasetId);
-    const dataset = await this.unitOfWork.execute((transaction) =>
-      transaction.datasets.findByIdForOwner(datasetId, input.ownerId)
+    const dataset = await this.unitOfWork.executeForUser(input.userId, (transaction) =>
+      transaction.datasets.findByIdForUser(datasetId, input.userId)
     );
     if (!dataset) {
       throw new DatasetWorkflowError("DATASET_NOT_FOUND", "Dataset was not found.");
@@ -48,9 +49,11 @@ export class InitiateDatasetUploadHandler {
     assertUploadCanStart(dataset.status);
 
     const uploadIntentId = crypto.randomUUID();
+    const datasetVersionId = crypto.randomUUID();
     const presignedUpload = await this.objectStorage.createPresignedUpload({
-      ownerId: input.ownerId,
+      userId: input.userId,
       datasetId: input.datasetId,
+      datasetVersionId,
       uploadIntentId,
       filename: dataset.originalFilename,
       contentType: input.contentType,
@@ -59,10 +62,10 @@ export class InitiateDatasetUploadHandler {
       expiresInSeconds: this.presignedUrlTtlSeconds
     });
 
-    await this.unitOfWork.execute(async (transaction) => {
-      const lockedDataset = await transaction.datasets.findByIdForOwner(
+    await this.unitOfWork.executeForUser(input.userId, async (transaction) => {
+      const lockedDataset = await transaction.datasets.findByIdForUser(
         datasetId,
-        input.ownerId,
+        input.userId,
         { forUpdate: true }
       );
       if (!lockedDataset) {
@@ -76,10 +79,26 @@ export class InitiateDatasetUploadHandler {
         await transaction.events.publish(lockedDataset.pullDomainEvents());
       }
 
+      const versionNumber = await transaction.datasetVersions.nextVersionNumber(
+        input.datasetId
+      );
+      await transaction.datasetVersions.createPending({
+        id: datasetVersionId,
+        userId: input.userId,
+        datasetId: input.datasetId,
+        versionNumber,
+        originalFilename: lockedDataset.originalFilename,
+        mimeType: input.contentType,
+        objectKey: presignedUpload.objectKey,
+        sizeBytes: input.sizeBytes,
+        checksum: input.checksumSha256
+      });
+
       await transaction.uploadIntents.create({
         id: uploadIntentId,
         datasetId: input.datasetId,
-        ownerId: input.ownerId,
+        datasetVersionId,
+        userId: input.userId,
         objectKey: presignedUpload.objectKey,
         contentType: input.contentType,
         sizeBytes: input.sizeBytes,
@@ -91,6 +110,7 @@ export class InitiateDatasetUploadHandler {
 
     return {
       uploadIntentId,
+      datasetVersionId,
       objectKey: presignedUpload.objectKey,
       uploadUrl: presignedUpload.uploadUrl,
       method: "PUT",

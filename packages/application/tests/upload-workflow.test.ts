@@ -12,18 +12,21 @@ import {
 } from "../src";
 import { Dataset, type DomainEvent } from "@agentic-csv/domain";
 
-const ownerId = "11111111-1111-4111-8111-111111111111";
+const userId = "11111111-1111-4111-8111-111111111111";
 const datasetId = "22222222-2222-4222-8222-222222222222";
 const uploadIntentId = "33333333-3333-4333-8333-333333333333";
+const datasetVersionId = "44444444-4444-4444-8444-444444444444";
 const checksumSha256 = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
 
 class FakeObjectStorage implements ObjectStorage {
+  public lastVersionId: string | undefined;
   public metadata: StoredObjectMetadata = {
     sizeBytes: 128,
     contentType: "text/csv",
     checksumSha256,
-    ownerId,
-    datasetId
+    userId,
+    datasetId,
+    datasetVersionId
   };
 
   public async isReady(): Promise<boolean> {
@@ -31,12 +34,13 @@ class FakeObjectStorage implements ObjectStorage {
   }
 
   public createObjectKey(): string {
-    return "owners/owner/datasets/dataset/uploads/intent/sales.csv";
+    return "users/user/datasets/dataset/versions/intent/original.csv";
   }
 
-  public async createPresignedUpload() {
+  public async createPresignedUpload(request: { readonly datasetVersionId: string }) {
+    this.lastVersionId = request.datasetVersionId;
     return {
-      objectKey: this.createObjectKey(),
+      objectKey: `users/user/datasets/dataset/versions/${request.datasetVersionId}/original.csv`,
       uploadUrl: "https://storage.example/upload",
       requiredHeaders: {},
       expiresAt: new Date("2026-01-01T01:00:00.000Z")
@@ -51,9 +55,11 @@ class FakeObjectStorage implements ObjectStorage {
 class FakeUnitOfWork implements UnitOfWork {
   public constructor(private readonly transaction: ApplicationTransaction) {}
 
-  public execute<TResult>(
+  public executeForUser<TResult>(
+    actorUserId: string,
     work: (transaction: ApplicationTransaction) => Promise<TResult>
   ): Promise<TResult> {
+    expect(actorUserId).toBe(userId);
     return work(this.transaction);
   }
 }
@@ -67,16 +73,17 @@ function createFixture(
   }
 ) {
   const dataset = Dataset.create({
-    ownerId,
+    userId,
     name: "Sales",
     originalFilename: "sales.csv"
   });
   dataset.pullDomainEvents();
   const intent: DatasetUploadIntent = {
     id: uploadIntentId,
-    ownerId,
+    userId,
     datasetId,
-    objectKey: "owners/owner/datasets/dataset/uploads/intent/sales.csv",
+    datasetVersionId,
+    objectKey: "users/user/datasets/dataset/versions/intent/original.csv",
     contentType: "text/csv",
     sizeBytes: 128,
     checksumSha256,
@@ -85,16 +92,25 @@ function createFixture(
   };
   const publishedEvents: DomainEvent[] = [];
   const ingestionRequests: unknown[] = [];
+  const versions: unknown[] = [];
   let idempotencyResponse: unknown;
 
   const transaction: ApplicationTransaction = {
     datasets: {
       async save() {},
-      async findById() {
+      async findByIdForUser() {
         return dataset;
+      }
+    },
+    datasetVersions: {
+      async nextVersionNumber() {
+        return 1;
       },
-      async findByIdForOwner() {
-        return dataset;
+      async createPending(version) {
+        versions.push(version);
+      },
+      async markUploaded(id, versionUserId) {
+        versions.push({ id, userId: versionUserId, status: "uploaded" });
       }
     },
     events: {
@@ -104,7 +120,7 @@ function createFixture(
     },
     uploadIntents: {
       async create() {},
-      async findByIdForOwner() {
+      async findByIdForUser() {
         return intent;
       },
       async markCompleted(_id, completedAt) {
@@ -135,6 +151,7 @@ function createFixture(
     unitOfWork: new FakeUnitOfWork(transaction),
     publishedEvents,
     ingestionRequests,
+    versions,
     get idempotencyResponse() {
       return idempotencyResponse;
     }
@@ -153,13 +170,43 @@ describe("dataset upload workflow", () => {
 
     await expect(
       handler.execute({
-        ownerId,
+        userId,
         datasetId,
         contentType: "text/csv",
         sizeBytes: 101,
         checksumSha256
       })
     ).rejects.toMatchObject({ code: "UPLOAD_TOO_LARGE" });
+  });
+
+  it("creates a persisted dataset version for the presigned object", async () => {
+    const fixture = createFixture();
+    const storage = new FakeObjectStorage();
+    const handler = new InitiateDatasetUploadHandler(
+      fixture.unitOfWork,
+      storage,
+      1_000,
+      900
+    );
+
+    const result = await handler.execute({
+      userId,
+      datasetId,
+      contentType: "text/csv",
+      sizeBytes: 128,
+      checksumSha256
+    });
+
+    expect(result.datasetVersionId).toBe(storage.lastVersionId);
+    expect(fixture.versions).toContainEqual(
+      expect.objectContaining({
+        id: result.datasetVersionId,
+        userId,
+        datasetId,
+        versionNumber: 1,
+        checksum: checksumSha256
+      })
+    );
   });
 
   it("does not mutate a dataset when stored object metadata differs", async () => {
@@ -190,11 +237,17 @@ describe("dataset upload workflow", () => {
       "dataset.uploaded"
     );
     expect(fixture.ingestionRequests).toHaveLength(1);
+    expect(result.datasetVersionId).toBe(datasetVersionId);
     expect(fixture.idempotencyResponse).toEqual(result);
   });
 
   it("replays a completed idempotent request without mutating state", async () => {
-    const response = { datasetId, status: "uploaded", ingestionRequested: true };
+    const response = {
+      datasetId,
+      datasetVersionId,
+      status: "uploaded",
+      ingestionRequested: true
+    };
     const fixture = createFixture({
       acquired: false,
       requestHash: "request-hash",
@@ -231,7 +284,7 @@ describe("dataset upload workflow", () => {
 
 function completionInput() {
   return {
-    ownerId,
+    userId,
     datasetId,
     uploadIntentId,
     idempotencyKey: "upload-completion-key",

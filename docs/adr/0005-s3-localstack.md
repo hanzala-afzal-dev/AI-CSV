@@ -15,7 +15,7 @@ locally.
 
 ## Consequences
 
-The application can use presigned direct uploads and owner-scoped object keys. The same
+The application can use presigned direct uploads and user-scoped object keys. The same
 adapter shape can target AWS S3 or another compatible service later.
 
 ## Rejected Alternatives

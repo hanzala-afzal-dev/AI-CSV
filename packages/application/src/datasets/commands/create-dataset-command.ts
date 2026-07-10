@@ -7,7 +7,7 @@ export const createDatasetCommandType = "dataset.create.v1";
 
 export interface CreateDatasetResult {
   readonly datasetId: string;
-  readonly ownerId: string;
+  readonly userId: string;
   readonly name: string;
   readonly originalFilename: string;
   readonly status: DatasetStatus;
@@ -17,7 +17,7 @@ export interface CreateDatasetResult {
 
 export interface CreateDatasetCommand extends Command<CreateDatasetResult> {
   readonly type: typeof createDatasetCommandType;
-  readonly ownerId: string;
+  readonly userId: string;
   readonly name: string;
   readonly originalFilename: string;
 }
@@ -30,20 +30,20 @@ export class CreateDatasetCommandHandler implements CommandHandler<
 
   public async execute(command: CreateDatasetCommand): Promise<CreateDatasetResult> {
     const dataset = Dataset.create({
-      ownerId: command.ownerId,
+      userId: command.userId,
       name: command.name,
       originalFilename: command.originalFilename
     });
 
     const events = dataset.pullDomainEvents();
-    await this.unitOfWork.execute(async (transaction) => {
+    await this.unitOfWork.executeForUser(command.userId, async (transaction) => {
       await transaction.datasets.save(dataset);
       await transaction.events.publish(events);
     });
 
     return {
       datasetId: dataset.id.toString(),
-      ownerId: dataset.ownerId,
+      userId: dataset.userId,
       name: dataset.name,
       originalFilename: dataset.originalFilename,
       status: dataset.status,

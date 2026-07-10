@@ -12,19 +12,25 @@ import {
   varchar
 } from "drizzle-orm/pg-core";
 
-export const owners = pgTable("owners", {
+export const users = pgTable("users", {
   id: uuid("id").primaryKey().defaultRandom(),
+  email: varchar("email", { length: 320 }).unique(),
+  pendingEmail: varchar("pending_email", { length: 320 }),
   displayName: varchar("display_name", { length: 160 }).notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
+  passwordHash: text("password_hash"),
+  emailVerifiedAt: timestamp("email_verified_at", { withTimezone: true }),
+  status: varchar("status", { length: 32 }).notNull().default("api_only"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
 });
 
 export const apiKeys = pgTable(
   "api_keys",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    ownerId: uuid("owner_id")
+    userId: uuid("user_id")
       .notNull()
-      .references(() => owners.id, { onDelete: "cascade" }),
+      .references(() => users.id, { onDelete: "cascade" }),
     name: varchar("name", { length: 120 }).notNull(),
     keyPrefix: varchar("key_prefix", { length: 24 }).notNull(),
     keyHash: varchar("key_hash", { length: 64 }).notNull(),
@@ -35,7 +41,7 @@ export const apiKeys = pgTable(
   },
   (table) => [
     uniqueIndex("api_keys_key_hash_unique").on(table.keyHash),
-    index("api_keys_owner_active_idx").on(table.ownerId, table.revokedAt)
+    index("api_keys_user_active_idx").on(table.userId, table.revokedAt)
   ]
 );
 
@@ -45,6 +51,19 @@ export const datasetStatusEnum = pgEnum("dataset_status", [
   "profiling",
   "ready",
   "failed"
+]);
+
+export const datasetVersionStatusEnum = pgEnum("dataset_version_status", [
+  "pending_upload",
+  "uploaded",
+  "queued",
+  "validating",
+  "profiling",
+  "indexing",
+  "ready",
+  "failed",
+  "deleting",
+  "deleted"
 ]);
 
 export const messageRoleEnum = pgEnum("analysis_message_role", [
@@ -58,9 +77,9 @@ export const datasets = pgTable(
   "datasets",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    ownerId: uuid("owner_id")
+    userId: uuid("user_id")
       .notNull()
-      .references(() => owners.id, { onDelete: "cascade" }),
+      .references(() => users.id, { onDelete: "cascade" }),
     name: varchar("name", { length: 120 }).notNull(),
     originalFilename: varchar("original_filename", { length: 255 }).notNull(),
     objectKey: text("object_key"),
@@ -73,9 +92,9 @@ export const datasets = pgTable(
     deletedAt: timestamp("deleted_at", { withTimezone: true })
   },
   (table) => [
-    index("datasets_owner_status_idx").on(table.ownerId, table.status),
+    index("datasets_user_status_idx").on(table.userId, table.status),
     index("datasets_deleted_at_idx").on(table.deletedAt),
-    uniqueIndex("datasets_owner_object_key_unique").on(table.ownerId, table.objectKey)
+    uniqueIndex("datasets_user_object_key_unique").on(table.userId, table.objectKey)
   ]
 );
 
@@ -86,9 +105,10 @@ export const datasetUploadIntents = pgTable(
     datasetId: uuid("dataset_id")
       .notNull()
       .references(() => datasets.id, { onDelete: "cascade" }),
-    ownerId: uuid("owner_id")
+    datasetVersionId: uuid("dataset_version_id"),
+    userId: uuid("user_id")
       .notNull()
-      .references(() => owners.id, { onDelete: "cascade" }),
+      .references(() => users.id, { onDelete: "cascade" }),
     objectKey: text("object_key").notNull(),
     contentType: varchar("content_type", { length: 120 }).notNull(),
     sizeBytes: integer("size_bytes").notNull(),
@@ -103,7 +123,7 @@ export const datasetUploadIntents = pgTable(
       table.datasetId,
       table.createdAt
     ),
-    index("dataset_upload_intents_owner_idx").on(table.ownerId)
+    index("dataset_upload_intents_user_idx").on(table.userId)
   ]
 );
 
@@ -111,9 +131,9 @@ export const idempotencyRecords = pgTable(
   "idempotency_records",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    ownerId: uuid("owner_id")
+    userId: uuid("user_id")
       .notNull()
-      .references(() => owners.id, { onDelete: "cascade" }),
+      .references(() => users.id, { onDelete: "cascade" }),
     operation: varchar("operation", { length: 80 }).notNull(),
     key: varchar("key", { length: 200 }).notNull(),
     requestHash: varchar("request_hash", { length: 64 }).notNull(),
@@ -123,8 +143,8 @@ export const idempotencyRecords = pgTable(
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull()
   },
   (table) => [
-    uniqueIndex("idempotency_owner_operation_key_unique").on(
-      table.ownerId,
+    uniqueIndex("idempotency_user_operation_key_unique").on(
+      table.userId,
       table.operation,
       table.key
     ),
@@ -136,21 +156,40 @@ export const datasetVersions = pgTable(
   "dataset_versions",
   {
     id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
     datasetId: uuid("dataset_id")
       .notNull()
       .references(() => datasets.id),
-    version: integer("version").notNull(),
-    schemaProfile: jsonb("schema_profile").notNull(),
-    statisticalProfile: jsonb("statistical_profile").notNull(),
+    versionNumber: integer("version_number").notNull(),
+    originalFilename: varchar("original_filename", { length: 255 }).notNull(),
+    mimeType: varchar("mime_type", { length: 120 }).notNull(),
+    encoding: varchar("encoding", { length: 40 }),
+    delimiter: varchar("delimiter", { length: 8 }),
+    objectKey: text("object_key").notNull(),
+    normalizedObjectKey: text("normalized_object_key"),
+    sizeBytes: integer("size_bytes").notNull(),
     checksum: varchar("checksum", { length: 128 }).notNull(),
+    normalizedChecksum: varchar("normalized_checksum", { length: 128 }),
+    status: datasetVersionStatusEnum("status").notNull().default("pending_upload"),
+    failureCode: varchar("failure_code", { length: 80 }),
+    rowCount: integer("row_count"),
+    columnCount: integer("column_count"),
+    profileVersion: integer("profile_version"),
+    schemaProfile: jsonb("schema_profile"),
+    statisticalProfile: jsonb("statistical_profile"),
     active: boolean("active").notNull().default(true),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+    deletedAt: timestamp("deleted_at", { withTimezone: true })
   },
   (table) => [
     uniqueIndex("dataset_versions_dataset_version_unique").on(
       table.datasetId,
-      table.version
+      table.versionNumber
     ),
+    index("dataset_versions_user_status_idx").on(table.userId, table.status),
     index("dataset_versions_dataset_active_idx").on(table.datasetId, table.active)
   ]
 );
@@ -159,9 +198,9 @@ export const analysisThreads = pgTable(
   "analysis_threads",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    ownerId: uuid("owner_id")
+    userId: uuid("user_id")
       .notNull()
-      .references(() => owners.id, { onDelete: "cascade" }),
+      .references(() => users.id, { onDelete: "cascade" }),
     datasetId: uuid("dataset_id")
       .notNull()
       .references(() => datasets.id),
@@ -171,7 +210,7 @@ export const analysisThreads = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
   },
   (table) => [
-    index("analysis_threads_owner_dataset_idx").on(table.ownerId, table.datasetId),
+    index("analysis_threads_user_dataset_idx").on(table.userId, table.datasetId),
     uniqueIndex("analysis_threads_langgraph_thread_unique").on(table.langGraphThreadId)
   ]
 );
@@ -196,7 +235,7 @@ export const outboxEvents = pgTable(
   "outbox_events",
   {
     eventId: uuid("event_id").primaryKey().defaultRandom(),
-    ownerId: uuid("owner_id").references(() => owners.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }),
     aggregateId: uuid("aggregate_id").notNull(),
     eventName: varchar("event_name", { length: 160 }).notNull(),
     payload: jsonb("payload").notNull(),

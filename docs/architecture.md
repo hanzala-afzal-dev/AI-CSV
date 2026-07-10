@@ -53,13 +53,13 @@ down cleanly on `SIGTERM` and `SIGINT`.
 ## Identity and Request Security
 
 Phase 1 authenticates API clients with opaque bearer keys. PostgreSQL stores only an HMAC
-of each key and resolves it to an owner ID. Every dataset and upload query includes that
-owner ID; knowing a dataset UUID is insufficient for access. Bearer headers are not ambient
+of each key and resolves it to a user ID. Every dataset and upload query includes that
+user ID; knowing a dataset UUID is insufficient for access. Bearer headers are not ambient
 browser credentials, and mutation routes additionally reject cross-site fetch metadata,
 untrusted origins, and non-JSON content types. This protects the current API from CSRF while
 leaving interactive OAuth/session authentication as an explicit later decision.
 
-Redis applies a global pre-authentication ceiling, a credential-bucket limit, and an owner-scoped
+Redis applies a global pre-authentication ceiling, a credential-bucket limit, and a user-scoped
 limit. The global ceiling bounds invalid-key rotation while the credential limit contains one key.
 AI routes use the separately configured stricter policy. Protection fails closed when Redis cannot
 initialize.
@@ -72,7 +72,7 @@ contract defined by the profiling specification.
 
 Upload initiation creates an expiring intent containing the expected S3 key, byte size,
 media type, and checksum. Completion verifies the stored object before a PostgreSQL
-transaction locks owner-scoped records. Dataset state, domain events, upload completion,
+transaction locks user-scoped records. Dataset state, domain events, upload completion,
 idempotency response, and an ingestion outbox event commit together. The worker publishes
 that outbox event to BullMQ with a deterministic job ID, so a crash between enqueue and
 outbox acknowledgement does not create duplicate work.
@@ -92,6 +92,15 @@ collection lifecycle independent from relational persistence.
 
 ## Observability
 
-Pino produces structured logs with service, correlation, queue, job, dataset, and owner
+Pino produces structured logs with service, correlation, queue, job, dataset, and user
 fields. Secret-like fields are redacted. CSV contents, API keys, authorization headers,
 passwords, and signed URLs must not be logged.
+
+## PostgreSQL Tenant Context
+
+The migration role owns the schema. Web and worker processes use the non-owner
+`agentic_csv_app` role. Every application unit of work opens a transaction and sets
+`app.current_user_id` transaction-locally before accessing tenant tables. Forced RLS policies
+deny access when the setting is absent and filter guessed identifiers even if a repository
+predicate is accidentally omitted. API-key authentication is isolated to its dedicated table;
+resource access begins only after a user identity has been resolved.

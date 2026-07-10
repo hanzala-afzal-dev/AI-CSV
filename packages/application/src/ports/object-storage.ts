@@ -1,6 +1,7 @@
 export interface PresignedUploadRequest {
-  readonly ownerId: string;
+  readonly userId: string;
   readonly datasetId: string;
+  readonly datasetVersionId: string;
   readonly filename: string;
   readonly uploadIntentId: string;
   readonly contentType: string;
@@ -20,15 +21,17 @@ export interface StoredObjectMetadata {
   readonly sizeBytes: number;
   readonly contentType: string | null;
   readonly checksumSha256: string | null;
-  readonly ownerId: string | null;
+  readonly userId: string | null;
   readonly datasetId: string | null;
+  readonly datasetVersionId: string | null;
 }
 
 export interface ObjectStorage {
   isReady(): Promise<boolean>;
   createObjectKey(input: {
-    ownerId: string;
+    userId: string;
     datasetId: string;
+    datasetVersionId: string;
     uploadIntentId: string;
     filename: string;
   }): string;
