@@ -40,3 +40,20 @@ export type {
   CreateDatasetCommand,
   CreateDatasetResult
 } from "./datasets/commands/create-dataset-command";
+export { IdentityError } from "./identity/identity-error";
+export { IdentityService } from "./identity/identity-service";
+export type {
+  IdentityPolicy,
+  SessionCredentials,
+  SessionMetadata
+} from "./identity/identity-service";
+export type {
+  AuthenticatedSession,
+  IdentityMailer,
+  IdentityRepository,
+  LoginIdentity,
+  PasswordHasher,
+  SafeIdentityUser,
+  SecureTokenService,
+  SessionSummary
+} from "./identity/ports";

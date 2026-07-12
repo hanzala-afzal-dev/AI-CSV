@@ -40,9 +40,15 @@ next context are tracked in [`implementation.md`](./implementation.md).
 
 ## Frontend Layer
 
-`apps/web` is a React frontend delivered through Next.js App Router. It uses Server
-Components by default, keeps route handlers thin, and uses Tailwind CSS for application
-styling without introducing a component framework.
+`apps/web` is a React frontend delivered through Next.js App Router. It uses Server Components by
+default, keeps route handlers thin, and uses Tailwind CSS for application styling. Frontend work is
+component-driven: routes compose feature components, shared primitives live in `src/components/ui`, and
+feature components live in named folders under `src/components`.
+
+shadcn/ui is the preferred source for accessible primitives. Components are added only when an active
+feature requires them and remain repository-owned source rather than an opaque runtime framework. Client
+Components are limited to the smallest interactive boundary; business and authorization rules stay in
+the domain/application layers.
 
 ## Liveness and Readiness
 
@@ -60,12 +66,19 @@ down cleanly on `SIGTERM` and `SIGINT`.
 
 ## Identity and Request Security
 
-Phase 1 authenticates API clients with opaque bearer keys. PostgreSQL stores only an HMAC
-of each key and resolves it to a user ID. Every dataset and upload query includes that
-user ID; knowing a dataset UUID is insufficient for access. Bearer headers are not ambient
-browser credentials, and mutation routes additionally reject cross-site fetch metadata,
-untrusted origins, and non-JSON content types. This protects the current API from CSRF while
-leaving interactive OAuth/session authentication as an explicit later decision.
+Browser users authenticate with email/password and persisted opaque sessions. Passwords use centrally
+configured Argon2id. PostgreSQL stores only keyed hashes of session, CSRF, verification, reset, and API
+tokens. The browser receives the session token only through a secure HTTP-only SameSite cookie; session
+identifiers never appear in URLs.
+
+Cookie-authenticated mutations require JSON, a trusted Origin/Referer, and a session-bound CSRF token.
+CSRF refresh rotates the stored hash, making an earlier token fail on replay. Sessions enforce idle and
+absolute expiry, support targeted revocation, and rotate after login, password changes, and sensitive
+re-authentication. Public authentication and recovery operations use enumeration-safe bodies plus hashed
+IP, identifier, and account rate-limit buckets.
+
+Opaque bearer API keys remain a compatibility credential for CLI/server clients. PostgreSQL stores only
+their HMAC and resolves it to a user ID. Browser code never stores or uses these keys.
 
 Redis applies a global pre-authentication ceiling, a credential-bucket limit, and a user-scoped
 limit. The global ceiling bounds invalid-key rotation while the credential limit contains one key.

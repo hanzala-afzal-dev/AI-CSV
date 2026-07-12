@@ -7,6 +7,11 @@ export type { DatabaseClient } from "./database/client";
 export { DrizzleUnitOfWork } from "./database/unit-of-work";
 export { authenticateApiKey, generateApiKey, hashApiKey } from "./auth/api-key";
 export type { ApiPrincipal } from "./auth/api-key";
+export { PostgresIdentityRepository } from "./auth/identity-repository";
+export { SmtpIdentityMailer } from "./auth/identity-mailer";
+export { Argon2PasswordHasher } from "./auth/password-hasher";
+export type { Argon2Policy } from "./auth/password-hasher";
+export { HmacSecureTokenService } from "./auth/secure-token";
 export { createBullMqConnectionOptions, createRedisClient } from "./redis/client";
 export type { RedisClient, RedisConnectionOptions } from "./redis/client";
 export {
