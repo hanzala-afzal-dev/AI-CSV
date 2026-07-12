@@ -1,12 +1,11 @@
 import { createHmac, randomBytes } from "node:crypto";
-import { and, eq, gt, isNull, or } from "drizzle-orm";
-import { apiKeys } from "../../drizzle/schema";
+import { sql } from "drizzle-orm";
 import type { DatabaseClient } from "../database/client";
 
 const apiKeyPattern = /^csv_key_[A-Za-z0-9_-]{43}$/;
 
 export interface ApiPrincipal {
-  readonly ownerId: string;
+  readonly userId: string;
   readonly apiKeyId: string;
 }
 
@@ -30,31 +29,21 @@ export function hashApiKey(apiKey: string, secret: string): string {
 export async function authenticateApiKey(
   database: DatabaseClient,
   authorizationHeader: string | null,
-  secret: string,
-  now = new Date()
+  secret: string
 ): Promise<ApiPrincipal | null> {
   const apiKey = readBearerToken(authorizationHeader);
   if (!apiKey) {
     return null;
   }
   const keyHash = hashApiKey(apiKey, secret);
-  const rows = await database
-    .select({ id: apiKeys.id, ownerId: apiKeys.ownerId })
-    .from(apiKeys)
-    .where(
-      and(
-        eq(apiKeys.keyHash, keyHash),
-        isNull(apiKeys.revokedAt),
-        or(isNull(apiKeys.expiresAt), gt(apiKeys.expiresAt, now))
-      )
-    )
-    .limit(1);
-  const key = rows[0];
+  const result = await database.execute<{ id: string; user_id: string }>(
+    sql`select id, user_id from public.authenticate_api_key(${keyHash})`
+  );
+  const key = result.rows[0];
   if (!key) {
     return null;
   }
-  await database.update(apiKeys).set({ lastUsedAt: now }).where(eq(apiKeys.id, key.id));
-  return { ownerId: key.ownerId, apiKeyId: key.id };
+  return { userId: key.user_id, apiKeyId: key.id };
 }
 
 function readBearerToken(header: string | null): string | null {

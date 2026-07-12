@@ -4,7 +4,8 @@ import { datasetStatusSchema } from "./dataset";
 export const apiErrorSchema = z.object({
   code: z.string().min(1),
   message: z.string().min(1),
-  details: z.record(z.string(), z.unknown()).optional()
+  requestId: z.string().min(1),
+  details: z.record(z.string(), z.unknown())
 });
 
 export const apiSuccessEnvelopeSchema = <TData extends z.ZodType>(data: TData) =>
@@ -15,14 +16,12 @@ export const apiSuccessEnvelopeSchema = <TData extends z.ZodType>(data: TData) =
   });
 
 export const apiErrorEnvelopeSchema = z.object({
-  ok: z.literal(false),
-  error: apiErrorSchema,
-  correlationId: z.string().min(1)
+  error: apiErrorSchema
 });
 
 export const datasetApiRepresentationSchema = z.object({
   id: z.string().uuid(),
-  ownerId: z.string().min(1),
+  userId: z.string().min(1),
   name: z.string().min(1).max(120),
   originalFilename: z.string().min(1),
   objectKey: z.string().min(1).nullable(),

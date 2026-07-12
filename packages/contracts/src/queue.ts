@@ -7,16 +7,17 @@ export const queueJobNameSchema = z.enum([
 ]);
 
 export const queuePayloadBaseSchema = z.object({
-  schemaVersion: z.literal(1),
+  version: z.literal(1),
   jobName: queueJobNameSchema,
   correlationId: z.string().min(1),
-  ownerId: z.string().min(1),
+  userId: z.string().uuid(),
   idempotencyKey: z.string().min(16)
 });
 
 export const datasetIngestionJobPayloadSchema = queuePayloadBaseSchema.extend({
   jobName: z.literal("dataset.ingest.v1"),
   datasetId: z.string().uuid(),
+  datasetVersionId: z.string().uuid(),
   objectKey: z.string().min(1)
 });
 

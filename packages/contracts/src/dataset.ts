@@ -39,6 +39,7 @@ export const completeDatasetUploadRequestSchema = z
 
 export const uploadIntentResponseSchema = z.object({
   uploadIntentId: z.string().uuid(),
+  datasetVersionId: z.string().uuid(),
   objectKey: z.string().min(1),
   uploadUrl: z.string().url(),
   method: z.literal("PUT"),
@@ -48,6 +49,7 @@ export const uploadIntentResponseSchema = z.object({
 
 export const uploadCompletionResponseSchema = z.object({
   datasetId: z.string().uuid(),
+  datasetVersionId: z.string().uuid(),
   status: z.literal("uploaded"),
   ingestionRequested: z.literal(true)
 });

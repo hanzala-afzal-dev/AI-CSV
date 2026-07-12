@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, max, sql } from "drizzle-orm";
 import type {
   ApplicationTransaction,
   DatasetRepository,
@@ -13,6 +13,7 @@ import type {
 import { Dataset, DatasetId, type DomainEvent } from "@agentic-csv/domain";
 import {
   datasetUploadIntents,
+  datasetVersions,
   datasets,
   idempotencyRecords,
   outboxEvents
@@ -31,7 +32,7 @@ class DrizzleDatasetRepository implements DatasetRepository {
       .insert(datasets)
       .values({
         id: props.id.toString(),
-        ownerId: props.ownerId,
+        userId: props.userId,
         name: props.name,
         originalFilename: props.originalFilename,
         objectKey: props.objectKey,
@@ -57,21 +58,12 @@ class DrizzleDatasetRepository implements DatasetRepository {
       });
   }
 
-  public async findById(id: DatasetId): Promise<Dataset | null> {
-    const rows = await this.database
-      .select()
-      .from(datasets)
-      .where(eq(datasets.id, id.toString()))
-      .limit(1);
-    return rows[0] ? mapDataset(rows[0]) : null;
-  }
-
-  public async findByIdForOwner(
+  public async findByIdForUser(
     id: DatasetId,
-    ownerId: string,
+    userId: string,
     options?: { readonly forUpdate?: boolean }
   ): Promise<Dataset | null> {
-    const condition = and(eq(datasets.id, id.toString()), eq(datasets.ownerId, ownerId));
+    const condition = and(eq(datasets.id, id.toString()), eq(datasets.userId, userId));
     const rows = options?.forUpdate
       ? await this.database
           .select()
@@ -94,7 +86,7 @@ class DrizzleEventPublisher implements EventPublisher {
     await this.database.insert(outboxEvents).values(
       events.map((event) => ({
         eventId: event.eventId,
-        ownerId: ownerIdFromPayload(event.payload),
+        userId: userIdFromPayload(event.payload),
         aggregateId: event.aggregateId,
         eventName: event.name,
         payload: event.payload,
@@ -111,14 +103,14 @@ class DrizzleUploadIntentRepository implements UploadIntentRepository {
     await this.database.insert(datasetUploadIntents).values(intent);
   }
 
-  public async findByIdForOwner(
+  public async findByIdForUser(
     id: string,
-    ownerId: string,
+    userId: string,
     options?: { readonly forUpdate?: boolean }
   ): Promise<DatasetUploadIntent | null> {
     const condition = and(
       eq(datasetUploadIntents.id, id),
-      eq(datasetUploadIntents.ownerId, ownerId)
+      eq(datasetUploadIntents.userId, userId)
     );
     const rows = options?.forUpdate
       ? await this.database
@@ -128,7 +120,11 @@ class DrizzleUploadIntentRepository implements UploadIntentRepository {
           .limit(1)
           .for("update")
       : await this.database.select().from(datasetUploadIntents).where(condition).limit(1);
-    return rows[0] ?? null;
+    const row = rows[0];
+    if (!row?.datasetVersionId) {
+      return null;
+    }
+    return { ...row, datasetVersionId: row.datasetVersionId };
   }
 
   public async markCompleted(id: string, completedAt: Date): Promise<void> {
@@ -139,11 +135,44 @@ class DrizzleUploadIntentRepository implements UploadIntentRepository {
   }
 }
 
+class DrizzleDatasetVersionRepository {
+  public constructor(private readonly database: DatabaseExecutor) {}
+
+  public async nextVersionNumber(datasetId: string): Promise<number> {
+    const rows = await this.database
+      .select({ maximum: max(datasetVersions.versionNumber) })
+      .from(datasetVersions)
+      .where(eq(datasetVersions.datasetId, datasetId));
+    return (rows[0]?.maximum ?? 0) + 1;
+  }
+
+  public async createPending(input: {
+    readonly id: string;
+    readonly userId: string;
+    readonly datasetId: string;
+    readonly versionNumber: number;
+    readonly originalFilename: string;
+    readonly mimeType: string;
+    readonly objectKey: string;
+    readonly sizeBytes: number;
+    readonly checksum: string;
+  }): Promise<void> {
+    await this.database.insert(datasetVersions).values(input);
+  }
+
+  public async markUploaded(id: string, userId: string, uploadedAt: Date): Promise<void> {
+    await this.database
+      .update(datasetVersions)
+      .set({ status: "uploaded", updatedAt: uploadedAt })
+      .where(and(eq(datasetVersions.id, id), eq(datasetVersions.userId, userId)));
+  }
+}
+
 class DrizzleIdempotencyRepository implements IdempotencyRepository {
   public constructor(private readonly database: DatabaseExecutor) {}
 
   public async find(input: {
-    readonly ownerId: string;
+    readonly userId: string;
     readonly operation: string;
     readonly key: string;
   }): Promise<IdempotencyReservation | null> {
@@ -156,7 +185,7 @@ class DrizzleIdempotencyRepository implements IdempotencyRepository {
       .from(idempotencyRecords)
       .where(
         and(
-          eq(idempotencyRecords.ownerId, input.ownerId),
+          eq(idempotencyRecords.userId, input.userId),
           eq(idempotencyRecords.operation, input.operation),
           eq(idempotencyRecords.key, input.key)
         )
@@ -174,7 +203,7 @@ class DrizzleIdempotencyRepository implements IdempotencyRepository {
   }
 
   public async reserve(input: {
-    readonly ownerId: string;
+    readonly userId: string;
     readonly operation: string;
     readonly key: string;
     readonly requestHash: string;
@@ -202,7 +231,7 @@ class DrizzleIdempotencyRepository implements IdempotencyRepository {
   }
 
   public async complete(input: {
-    readonly ownerId: string;
+    readonly userId: string;
     readonly operation: string;
     readonly key: string;
     readonly response: unknown;
@@ -213,7 +242,7 @@ class DrizzleIdempotencyRepository implements IdempotencyRepository {
       .set({ response: input.response, completedAt: input.completedAt })
       .where(
         and(
-          eq(idempotencyRecords.ownerId, input.ownerId),
+          eq(idempotencyRecords.userId, input.userId),
           eq(idempotencyRecords.operation, input.operation),
           eq(idempotencyRecords.key, input.key)
         )
@@ -225,16 +254,17 @@ class DrizzleIngestionRequestPublisher implements IngestionRequestPublisher {
   public constructor(private readonly database: DatabaseExecutor) {}
 
   public async publish(payload: {
-    readonly schemaVersion: 1;
+    readonly version: 1;
     readonly jobName: "dataset.ingest.v1";
     readonly correlationId: string;
-    readonly ownerId: string;
+    readonly userId: string;
     readonly datasetId: string;
+    readonly datasetVersionId: string;
     readonly objectKey: string;
     readonly idempotencyKey: string;
   }): Promise<void> {
     await this.database.insert(outboxEvents).values({
-      ownerId: payload.ownerId,
+      userId: payload.userId,
       aggregateId: payload.datasetId,
       eventName: "queue.dataset.ingest.v1",
       payload,
@@ -246,18 +276,23 @@ class DrizzleIngestionRequestPublisher implements IngestionRequestPublisher {
 export class DrizzleUnitOfWork implements UnitOfWork {
   public constructor(private readonly database: DatabaseClient) {}
 
-  public execute<TResult>(
+  public executeForUser<TResult>(
+    userId: string,
     work: (transaction: ApplicationTransaction) => Promise<TResult>
   ): Promise<TResult> {
-    return this.database.transaction((databaseTransaction) =>
-      work(createTransactionContext(databaseTransaction))
-    );
+    return this.database.transaction(async (databaseTransaction) => {
+      await databaseTransaction.execute(
+        sql`select set_config('app.current_user_id', ${userId}, true)`
+      );
+      return work(createTransactionContext(databaseTransaction));
+    });
   }
 }
 
 function createTransactionContext(database: DatabaseExecutor): ApplicationTransaction {
   return {
     datasets: new DrizzleDatasetRepository(database),
+    datasetVersions: new DrizzleDatasetVersionRepository(database),
     events: new DrizzleEventPublisher(database),
     uploadIntents: new DrizzleUploadIntentRepository(database),
     idempotency: new DrizzleIdempotencyRepository(database),
@@ -268,7 +303,7 @@ function createTransactionContext(database: DatabaseExecutor): ApplicationTransa
 function mapDataset(row: typeof datasets.$inferSelect): Dataset {
   return Dataset.rehydrate({
     id: DatasetId.from(row.id),
-    ownerId: row.ownerId,
+    userId: row.userId,
     name: row.name,
     originalFilename: row.originalFilename,
     objectKey: row.objectKey,
@@ -281,14 +316,14 @@ function mapDataset(row: typeof datasets.$inferSelect): Dataset {
   });
 }
 
-function ownerIdFromPayload(payload: unknown): string | null {
+function userIdFromPayload(payload: unknown): string | null {
   if (
     typeof payload === "object" &&
     payload !== null &&
-    "ownerId" in payload &&
-    typeof payload.ownerId === "string"
+    "userId" in payload &&
+    typeof payload.userId === "string"
   ) {
-    return payload.ownerId;
+    return payload.userId;
   }
   return null;
 }

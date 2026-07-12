@@ -4,16 +4,18 @@ import { createSilentLogger } from "@agentic-csv/infrastructure";
 import { processDatasetIngestionJob } from "../src/processors/dataset-ingestion.processor";
 
 describe("dataset ingestion processor", () => {
-  it("validates a versioned owner-scoped payload", async () => {
+  it("validates a versioned user-scoped payload", async () => {
     const job = {
       id: "job-1",
       data: {
-        schemaVersion: 1,
+        version: 1,
         jobName: "dataset.ingest.v1",
         correlationId: "correlation-1",
-        ownerId: "11111111-1111-4111-8111-111111111111",
+        userId: "11111111-1111-4111-8111-111111111111",
         datasetId: "22222222-2222-4222-8222-222222222222",
-        objectKey: "owners/owner/datasets/dataset/upload.csv",
+        datasetVersionId: "33333333-3333-4333-8333-333333333333",
+        objectKey:
+          "users/11111111-1111-4111-8111-111111111111/datasets/22222222-2222-4222-8222-222222222222/versions/33333333-3333-4333-8333-333333333333/original.csv",
         idempotencyKey: "upload-completion-key"
       }
     } as Job<unknown>;

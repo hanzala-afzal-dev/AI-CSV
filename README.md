@@ -44,8 +44,7 @@ Domain <- Application <- Infrastructure <- Web / Worker
   rate limiting, readiness.
 - `packages/agent`: LangGraph state and placeholder analysis graph.
 - `knowledge-base`: version-controlled policies, glossary, and example documents.
-- `specs`: constitution, completed foundation/upload specifications, and the next profiling
-  specification.
+- `specs`: approved product contracts plus an explicit implemented/planned status map.
 - `docs/adr`: architecture decision records.
 
 ## Prerequisites
@@ -67,6 +66,7 @@ pnpm format:check
 pnpm lint
 pnpm typecheck
 pnpm test
+pnpm test:integration
 pnpm build
 ```
 
@@ -79,7 +79,7 @@ examples are the reset source.
 ```bash
 pnpm infra:up
 pnpm db:migrate
-pnpm auth:key:create --owner-name "Local developer"
+pnpm auth:key:create --user-name "Local developer"
 pnpm infra:down
 ```
 
@@ -163,15 +163,15 @@ LocalStack creates the development bucket from `docker/localstack/init`.
 
 ## Authentication and CSV Upload API
 
-Phase 1 uses opaque bearer API keys. Only an HMAC of each key is stored in PostgreSQL;
+The current API-first compatibility slice uses opaque bearer API keys. Only an HMAC of each key is stored in PostgreSQL;
 the plaintext is printed once by the creation command. API keys are appropriate for this
-API-first slice. A later interactive browser client must use a dedicated session/OAuth
-flow rather than persist API keys in browser storage.
+API-first slice. Phase 2 replaces browser use with persisted, revocable cookie sessions and
+email/password authentication. Bearer keys remain server/CLI credentials and must not be stored by the browser.
 
-After applying migrations, create an owner and API key:
+After applying migrations, create a user and API key:
 
 ```bash
-pnpm auth:key:create --owner-name "Local developer" --key-name "local-cli"
+pnpm auth:key:create --user-name "Local developer" --key-name "local-cli"
 export CSV_API_KEY='the-key-printed-once'
 ```
 
@@ -187,8 +187,9 @@ POST /api/v1/datasets/{datasetId}/upload/complete
 
 Upload initiation requires the exact byte size, content type, and base64 SHA-256 checksum.
 The returned `PUT` URL must be called with every returned `requiredHeaders` entry. Completion
-verifies S3 size, media type, checksum, owner, and dataset metadata before atomically changing
-dataset state and writing the ingestion request to the outbox.
+verifies S3 size, media type, checksum, user, dataset, and version metadata before atomically
+changing dataset/version state and writing the versioned ingestion request to the outbox. New
+objects use `users/{userId}/datasets/{datasetId}/versions/{versionId}/original.csv`.
 
 ## Environment Strategy
 
@@ -196,6 +197,11 @@ Raw environment parsing is centralized in `packages/infrastructure/src/config/en
 Empty development API keys are allowed where integrations are not invoked. `AUTH_SECRET`
 must meet the configured minimum length. Compose overrides host URLs with Docker-internal
 service names.
+
+`MIGRATION_DATABASE_URL` uses the schema-owning migration role. `DATABASE_URL` uses the
+non-owner `agentic_csv_app` role so forced RLS policies remain effective. Existing development
+volumes created before this split must be intentionally reset with `pnpm docker:reset` before the
+new role can be initialized; that command deletes local database and object-storage data.
 
 ## Quality Commands
 
@@ -205,16 +211,18 @@ pnpm format:check
 pnpm lint
 pnpm typecheck
 pnpm test
+pnpm test:integration
 pnpm test:coverage
 pnpm build
-pnpm run ci
+pnpm quality
+pnpm quality:integration
 ```
 
 ## Specification Workflow
 
-Start with `specs/constitution.md`, then read the active feature spec. Foundation work is
-tracked in `specs/000-foundation`; CSV upload is tracked in `specs/001-csv-upload`. The
-next implementation target is `specs/002-dataset-profiling/spec.md`.
+Start with `specs/000-constitution.md`, then `specs/019-implementation-plan.md` and the
+relevant feature contract. `specs/README.md` records what is implemented versus planned.
+The superseded foundation/upload/profiling documents remain available in Git history.
 
 ## Design Constraints
 
@@ -231,6 +239,6 @@ next implementation target is `specs/002-dataset-profiling/spec.md`.
 ## Deferred Work
 
 - CSV profiling and DuckDB analytical execution.
-- Interactive OAuth/session authentication for a browser product.
+- Interactive email/password authentication and persisted browser sessions.
 - RAG ingestion and Qdrant document indexing.
 - Production LLM prompts and chart validation.

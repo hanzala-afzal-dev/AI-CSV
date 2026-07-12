@@ -51,23 +51,20 @@ export class S3ObjectStorage implements ObjectStorage {
   }
 
   public createObjectKey(input: {
-    ownerId: string;
+    userId: string;
     datasetId: string;
+    datasetVersionId: string;
     uploadIntentId: string;
     filename: string;
   }): string {
-    const ownerId = requireUuidPathSegment(input.ownerId, "ownerId");
+    const userId = requireUuidPathSegment(input.userId, "userId");
     const datasetId = requireUuidPathSegment(input.datasetId, "datasetId");
+    const datasetVersionId = requireUuidPathSegment(
+      input.datasetVersionId,
+      "datasetVersionId"
+    );
     const uploadIntentId = requireUuidPathSegment(input.uploadIntentId, "uploadIntentId");
-    const safeFilename =
-      input.filename
-        .trim()
-        .replace(/[^a-zA-Z0-9._-]/g, "-")
-        .replace(/-+/g, "-")
-        .replace(/^[-.]+|[-.]+$/g, "")
-        .slice(0, 180) || "dataset.csv";
-
-    return `owners/${ownerId}/datasets/${datasetId}/uploads/${uploadIntentId}/${safeFilename}`;
+    return `users/${userId}/datasets/${datasetId}/versions/${datasetVersionId}/original.csv`;
   }
 
   public async createPresignedUpload(
@@ -81,8 +78,9 @@ export class S3ObjectStorage implements ObjectStorage {
       ContentLength: request.sizeBytes,
       ChecksumSHA256: request.checksumSha256,
       Metadata: {
-        "owner-id": request.ownerId,
+        "user-id": request.userId,
         "dataset-id": request.datasetId,
+        "dataset-version-id": request.datasetVersionId,
         "upload-intent-id": request.uploadIntentId
       }
     });
@@ -96,8 +94,9 @@ export class S3ObjectStorage implements ObjectStorage {
       requiredHeaders: {
         "content-type": request.contentType,
         "x-amz-checksum-sha256": request.checksumSha256,
-        "x-amz-meta-owner-id": request.ownerId,
+        "x-amz-meta-user-id": request.userId,
         "x-amz-meta-dataset-id": request.datasetId,
+        "x-amz-meta-dataset-version-id": request.datasetVersionId,
         "x-amz-meta-upload-intent-id": request.uploadIntentId
       },
       expiresAt: new Date(Date.now() + request.expiresInSeconds * 1000)
@@ -117,8 +116,9 @@ export class S3ObjectStorage implements ObjectStorage {
       sizeBytes: response.ContentLength ?? -1,
       contentType: response.ContentType ?? null,
       checksumSha256: response.ChecksumSHA256 ?? null,
-      ownerId: response.Metadata?.["owner-id"] ?? null,
-      datasetId: response.Metadata?.["dataset-id"] ?? null
+      userId: response.Metadata?.["user-id"] ?? null,
+      datasetId: response.Metadata?.["dataset-id"] ?? null,
+      datasetVersionId: response.Metadata?.["dataset-version-id"] ?? null
     };
   }
 }

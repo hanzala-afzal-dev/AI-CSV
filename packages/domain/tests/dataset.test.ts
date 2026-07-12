@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { Dataset, DatasetId, DomainError } from "../src";
 
-const ownerId = "owner_123";
+const userId = "user_123";
 const originalFilename = "sales.csv";
 
 describe("Dataset aggregate", () => {
   it("creates a pending dataset and emits an event", () => {
-    const dataset = Dataset.create({ ownerId, name: "Sales", originalFilename });
+    const dataset = Dataset.create({ userId, name: "Sales", originalFilename });
 
     expect(dataset.status).toBe("pending_upload");
     expect(dataset.name).toBe("Sales");
@@ -16,14 +16,14 @@ describe("Dataset aggregate", () => {
 
   it("rejects invalid dataset names", () => {
     expect(() =>
-      Dataset.create({ ownerId, name: " ".repeat(4), originalFilename })
+      Dataset.create({ userId, name: " ".repeat(4), originalFilename })
     ).toThrow(DomainError);
   });
 
   it("supports valid lifecycle transitions", () => {
-    const dataset = Dataset.create({ ownerId, name: "Sales", originalFilename });
+    const dataset = Dataset.create({ userId, name: "Sales", originalFilename });
 
-    dataset.markUploaded("owners/owner_123/datasets/abc/sales.csv");
+    dataset.markUploaded("users/user_123/datasets/abc/sales.csv");
     dataset.startProfiling();
     dataset.markReady({ rowCount: 10, columnCount: 3 });
 
@@ -39,13 +39,13 @@ describe("Dataset aggregate", () => {
   });
 
   it("rejects invalid status transitions", () => {
-    const dataset = Dataset.create({ ownerId, name: "Sales", originalFilename });
+    const dataset = Dataset.create({ userId, name: "Sales", originalFilename });
 
     expect(() => dataset.startProfiling()).toThrow(DomainError);
   });
 
   it("does not change state when an upload object key is invalid", () => {
-    const dataset = Dataset.create({ ownerId, name: "Sales", originalFilename });
+    const dataset = Dataset.create({ userId, name: "Sales", originalFilename });
     dataset.pullDomainEvents();
 
     expect(() => dataset.markUploaded("   ")).toThrowError(DomainError);
@@ -55,8 +55,8 @@ describe("Dataset aggregate", () => {
   });
 
   it("rejects invalid profiling statistics", () => {
-    const dataset = Dataset.create({ ownerId, name: "Sales", originalFilename });
-    dataset.markUploaded("owners/owner_123/datasets/abc/sales.csv");
+    const dataset = Dataset.create({ userId, name: "Sales", originalFilename });
+    dataset.markUploaded("users/user_123/datasets/abc/sales.csv");
     dataset.startProfiling();
 
     expect(() => dataset.markReady({ rowCount: -1, columnCount: 3 })).toThrow(
@@ -66,13 +66,13 @@ describe("Dataset aggregate", () => {
   });
 
   it("requires a failure reason", () => {
-    const dataset = Dataset.create({ ownerId, name: "Sales", originalFilename });
+    const dataset = Dataset.create({ userId, name: "Sales", originalFilename });
 
     expect(() => dataset.markFailed("   ")).toThrow(DomainError);
   });
 
   it("can retry an upload after a failure", () => {
-    const dataset = Dataset.create({ ownerId, name: "Sales", originalFilename });
+    const dataset = Dataset.create({ userId, name: "Sales", originalFilename });
     dataset.markFailed("upload expired");
 
     dataset.retryUpload();
@@ -85,7 +85,7 @@ describe("Dataset aggregate", () => {
   it("can rehydrate without emitting events", () => {
     const dataset = Dataset.rehydrate({
       id: DatasetId.from("11111111-1111-4111-8111-111111111111"),
-      ownerId,
+      userId,
       name: "Sales",
       originalFilename,
       objectKey: null,

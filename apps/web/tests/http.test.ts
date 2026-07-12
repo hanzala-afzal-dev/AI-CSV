@@ -40,4 +40,18 @@ describe("mutation request security", () => {
       "Content-Type must be application/json"
     );
   });
+
+  it("rejects an untrusted referer when Origin is absent", () => {
+    const request = new Request(`${trustedOrigin}/api/v1/datasets`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        referer: "https://attacker.example/form"
+      }
+    });
+
+    expect(() => validateMutationRequest(request, trustedOrigin)).toThrowError(
+      "Request referer is not trusted"
+    );
+  });
 });
