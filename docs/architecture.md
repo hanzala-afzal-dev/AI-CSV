@@ -30,6 +30,14 @@ flowchart LR
 - Contracts are framework-neutral Zod schemas.
 - Agent contains LangGraph state and graph composition only.
 
+`pnpm architecture:check` enforces allowed workspace dependencies, prevents framework and
+infrastructure imports in the domain/application layers, and rejects relative imports that cross package
+boundaries. It is part of `pnpm quality`; an intentional boundary change requires an ADR and a matching
+checker update.
+
+Feature contexts are added when their owning phase introduces real behavior. The current conformance and
+next context are tracked in [`implementation.md`](./implementation.md).
+
 ## Frontend Layer
 
 `apps/web` is a React frontend delivered through Next.js App Router. It uses Server

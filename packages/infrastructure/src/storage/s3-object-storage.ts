@@ -63,7 +63,7 @@ export class S3ObjectStorage implements ObjectStorage {
       input.datasetVersionId,
       "datasetVersionId"
     );
-    const uploadIntentId = requireUuidPathSegment(input.uploadIntentId, "uploadIntentId");
+    requireUuidPathSegment(input.uploadIntentId, "uploadIntentId");
     return `users/${userId}/datasets/${datasetId}/versions/${datasetVersionId}/original.csv`;
   }
 

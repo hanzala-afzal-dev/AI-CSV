@@ -53,15 +53,8 @@ Each specification starts with a status. The initial set is **Approved for imple
 "Approved for implementation" describes the contract, not the current code status. Implementation is
 tracked separately below so planned behavior is never presented as shipped behavior.
 
-## Current implementation mapping
+## Implementation status
 
-| Area                                 | Status                                      | Notes                                                                                                                                |
-| ------------------------------------ | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| Phase 0 repository reconciliation    | Implemented, requires documentation refresh | Next.js modular monolith and workspace boundaries exist.                                                                             |
-| Phase 1 platform foundation          | Implemented except hosted CI                | Local `pnpm quality`, Docker Compose, PostgreSQL, Redis, Qdrant, LocalStack and worker exist. Hosted GitHub Actions remains out of scope. |
-| Phase 2 identity and tenant boundary | In progress                                 | The prior API-first bearer-key owner boundary must migrate to users, sessions and RLS.                                               |
-| Phase 5 upload orchestration         | Partially implemented early                 | Secure presigned upload and outbox dispatch exist; versioned ingestion/profiling remains planned.                                    |
-| Phases 3-4 and 6-9                   | Planned                                     | Provider settings, chat runtime, analytics, agent, RAG/memory and final UX are not yet implemented.                                  |
-
-The superseded foundation/upload/profiling documents remain available in Git history. Their implemented
-behavior is mapped here and in the root README rather than silently treated as unimplemented.
+Specification approval and implementation completion are separate states. The authoritative status,
+verification evidence, known limitations, and next phase are maintained in
+[`../implementation.md`](../implementation.md). Do not duplicate progress tables in individual specs.

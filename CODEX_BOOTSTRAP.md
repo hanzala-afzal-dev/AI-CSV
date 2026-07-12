@@ -1,6 +1,6 @@
 # Codex Implementation Brief: Production-Grade Agentic CSV Analyst Foundation
 
-> Status: historical foundation contract. Active behavior is defined by `specs/`, ADRs,
+> Status: historical foundation contract. Active behavior is defined by `docs/specs/`, ADRs,
 > and the current code. Do not rerun this brief as a replacement for an active feature spec.
 
 ## How to use this file
@@ -219,7 +219,7 @@ agentic-csv-analyst/
 │   ├── examples/
 │   ├── glossary/
 │   └── policies/
-├── specs/
+├── docs/specs/
 │   ├── constitution.md
 │   ├── 000-foundation/
 │   │   ├── spec.md
@@ -987,7 +987,7 @@ Add equivalent common targets to a `Makefile`.
 
 ## 24. Specification-driven development artifacts
 
-Create `specs/constitution.md` with these principles:
+Create `docs/specs/constitution.md` with these principles:
 
 1. correctness before autonomy
 2. specification before implementation
@@ -1000,7 +1000,7 @@ Create `specs/constitution.md` with these principles:
 9. small, reviewable increments
 10. documentation is part of the product
 
-Create `specs/000-foundation/spec.md` containing:
+Create `docs/specs/000-foundation/spec.md` containing:
 
 - problem statement
 - project goals
@@ -1012,7 +1012,7 @@ Create `specs/000-foundation/spec.md` containing:
 - failure modes
 - definition of done
 
-Create `specs/000-foundation/plan.md` containing:
+Create `docs/specs/000-foundation/plan.md` containing:
 
 - architecture overview
 - dependency direction
@@ -1024,9 +1024,9 @@ Create `specs/000-foundation/plan.md` containing:
 - migration strategy
 - operational commands
 
-Create `specs/000-foundation/tasks.md` with implementation tasks and completion checkboxes.
+Create `docs/specs/000-foundation/tasks.md` with implementation tasks and completion checkboxes.
 
-Create `specs/001-csv-upload/spec.md` as the next feature specification. It should cover only:
+Create `docs/specs/001-csv-upload/spec.md` as the next feature specification. It should cover only:
 
 - authenticated ownership boundary
 - dataset creation
@@ -1327,6 +1327,6 @@ At the end, provide a concise implementation report containing:
 5. Validation commands executed and their outcomes.
 6. Any checks that could not be run, with the precise reason.
 7. Known limitations intentionally deferred to later specifications.
-8. The recommended next step: implement `specs/001-csv-upload/spec.md`.
+8. The recommended next step: implement `docs/specs/001-csv-upload/spec.md`.
 
 Do not provide only a high-level summary. The repository itself must contain the complete boilerplate and documentation described above.

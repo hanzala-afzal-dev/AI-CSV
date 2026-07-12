@@ -17,6 +17,6 @@ export async function processDatasetIngestionJob(
 
   childLogger.info("dataset ingestion job validated");
   childLogger.info(
-    "CSV profiling is deferred to Phase 5 in specs/019-implementation-plan.md"
+    "CSV profiling is deferred to Phase 5 in docs/specs/019-implementation-plan.md"
   );
 }

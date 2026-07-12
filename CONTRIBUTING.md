@@ -2,7 +2,7 @@
 
 ## Workflow
 
-1. Read the active specification in `specs/`.
+1. Read `docs/implementation.md` and the active specification in `docs/specs/`.
 2. Keep changes inside the defined architecture boundary.
 3. Add or update tests for domain rules, contracts, and pure infrastructure logic.
 4. Run the quality gates before opening a pull request.
@@ -13,6 +13,7 @@
 corepack enable
 pnpm install
 pnpm format:check
+pnpm architecture:check
 pnpm lint
 pnpm typecheck
 pnpm test

@@ -1,6 +1,11 @@
 # 001 — Product Requirements
 
-**Status:** Approved for implementation
+**Contract status:** Approved  
+**Implementation status:** Incremental; tracked only in [`../implementation.md`](../implementation.md)
+
+This document defines the complete MVP outcome. It is not an implementation phase and must not be
+marked complete until every success criterion in section 7 is verified. Delivery order and phase-level
+definitions of done are defined in [019](./019-implementation-plan.md).
 
 ## 1. Product summary
 
@@ -110,3 +115,20 @@ Runs the project locally, adds providers or chart types, and validates changes t
 ## 7. Success criteria
 
 The MVP is successful when two different users can upload similarly named CSV files, maintain independent chat histories, securely use their own OpenAI keys, ask questions, receive accurate calculated charts, and cannot access any resource belonging to the other user.
+
+## 8. Delivery ownership
+
+| Capability                                            | Owning phase |
+| ----------------------------------------------------- | ------------ |
+| Repository and operational foundation                 | Phases 0-1   |
+| Accounts, sessions and tenant isolation               | Phase 2      |
+| OpenAI credentials and model preferences              | Phase 3      |
+| Persistent conversations and run streaming            | Phase 4      |
+| CSV upload, validation and profiling                  | Phase 5      |
+| Deterministic calculations and charts                 | Phase 6      |
+| Agent orchestration and clarification                 | Phase 7      |
+| Retrieval and memory                                  | Phase 8      |
+| Suggestions, security review and portfolio completion | Phase 9      |
+
+Partial infrastructure or schema scaffolding does not complete a capability. The owning phase must meet
+its definition of done and the global definition of done before the capability is recorded as implemented.

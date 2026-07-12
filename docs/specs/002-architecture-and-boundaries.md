@@ -1,6 +1,10 @@
 # 002 — Architecture and Bounded Contexts
 
-**Status:** Approved for implementation
+**Contract status:** Approved  
+**Implementation status:** Baseline implemented; feature contexts are added by their owning phases
+
+This is a cross-cutting architecture contract, not a feature phase. Its dependency rules apply from the
+first commit, while bounded-context behavior is implemented incrementally according to [019](./019-implementation-plan.md).
 
 ## 1. Style
 
@@ -84,7 +88,8 @@ packages/
   agent/
   config/
 knowledge-base/
-specs/
+docs/specs/
+docs/implementation.md
 docs/adr/
 ```
 
@@ -164,3 +169,24 @@ Semantic documents and memories with mandatory user/dataset payload filters.
 ### DuckDB
 
 Deterministic CSV/Parquet inspection and analytical calculations. It is embedded in worker/server processes rather than deployed as a network database.
+
+## 7. Current repository conformance
+
+- `apps/web` is the Next.js App Router delivery and composition root.
+- `apps/worker` is the BullMQ delivery and composition root for asynchronous work.
+- `packages/domain` owns framework-neutral business behavior.
+- `packages/application` owns CQRS handlers and ports.
+- `packages/infrastructure` owns Drizzle, PostgreSQL, Redis, BullMQ, S3, Qdrant, DuckDB,
+  configuration, logging, and rate-limiting adapters.
+- `packages/contracts` owns framework-neutral Zod boundary schemas.
+- `packages/agent` owns LangGraph state and composition, and may call application services but may not
+  import infrastructure adapters.
+
+Feature-first folders are created only when their owning phase introduces real behavior. Empty bounded
+context directories are prohibited because they falsely imply implemented capabilities.
+
+## 8. Enforcement
+
+`pnpm architecture:check` validates workspace dependencies and prohibited source imports. It runs inside
+`pnpm quality`. Architecture changes that intentionally alter these rules require an ADR plus a matching
+update to the executable check.

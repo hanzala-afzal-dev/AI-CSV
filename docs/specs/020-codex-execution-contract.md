@@ -4,11 +4,12 @@
 
 ## Mission
 
-Implement the Agentic CSV Analyst in the existing repository according to every file in `specs/`. The existing React frontend is authoritative user work and must be inspected and preserved unless a change is required by a specification.
+Implement the Agentic CSV Analyst in the existing repository according to every file in `docs/specs/`. The existing React frontend is authoritative user work and must be inspected and preserved unless a change is required by a specification.
 
 ## Working rules
 
-1. Read `specs/000-constitution.md` and `specs/019-implementation-plan.md` first.
+1. Read `docs/implementation.md`, `docs/specs/000-constitution.md`, and
+   `docs/specs/019-implementation-plan.md` first.
 2. Inspect repository structure, package manager, frontend framework, current code and Docker files.
 3. Create a short reconciliation report before large changes.
 4. Implement one phase at a time; do not jump directly to a monolithic AI agent.
