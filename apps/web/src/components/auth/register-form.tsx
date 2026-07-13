@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+import Link from "next/link";
 import { LoaderCircle, UserPlus } from "lucide-react";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -13,10 +14,11 @@ export function RegisterForm() {
   const [pending, setPending] = useState(false);
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const form = event.currentTarget;
     setPending(true);
     setError(undefined);
     setMessage(undefined);
-    const data = new FormData(event.currentTarget);
+    const data = new FormData(form);
     if (data.get("password") !== data.get("confirmation")) {
       setError("Passwords do not match.");
       setPending(false);
@@ -32,7 +34,7 @@ export function RegisterForm() {
         }
       );
       setMessage(result.data.message);
-      event.currentTarget.reset();
+      form.reset();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Registration failed.");
     } finally {
@@ -42,8 +44,19 @@ export function RegisterForm() {
   return (
     <form className="grid gap-5" onSubmit={submit}>
       {message ? (
-        <Alert className="border-success/30 bg-success-soft text-success-strong">
-          {message}
+        <Alert className="grid gap-2 border-success/30 bg-success-soft text-success-strong">
+          <span>{message}</span>
+          <span>
+            Already registered?{" "}
+            <Link className="font-semibold underline" href="/login">
+              Sign in
+            </Link>{" "}
+            or{" "}
+            <Link className="font-semibold underline" href="/forgot-password">
+              reset your password
+            </Link>
+            .
+          </span>
         </Alert>
       ) : null}
       {error ? (

@@ -4,6 +4,7 @@
 **/.env.*.local
 !.env.test
 **/docker-compose.yml
+/docker/stack.yml
 !**/*.example
 .idea/
 node_modules/

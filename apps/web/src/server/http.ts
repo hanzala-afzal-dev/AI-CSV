@@ -39,6 +39,9 @@ export interface BrowserRequestContext {
 export const genericAcceptedMessage =
   "If the account can receive this request, an email will arrive shortly.";
 
+export const genericRegistrationAcceptedMessage =
+  "If this email is eligible for a new account, a verification email will arrive shortly.";
+
 export function getSessionCookie(request: Request): string | null {
   const cookieName = getRuntime().env.SESSION_COOKIE_NAME;
   const cookieHeader = request.headers.get("cookie");
@@ -295,7 +298,7 @@ export function errorResponse(
     {
       correlationId,
       code: mapped.code,
-      error: mapped.status >= 500 ? error : undefined
+      error: mapped.status >= 500 ? serializeError(error) : undefined
     },
     "API request failed"
   );
@@ -310,6 +313,18 @@ export function errorResponse(
     },
     { status: mapped.status, headers: mapped.headers }
   );
+}
+
+function serializeError(error: unknown): Record<string, unknown> {
+  if (!(error instanceof Error)) {
+    return { name: "UnknownError" };
+  }
+  return {
+    name: error.name,
+    message: error.message.slice(0, 500),
+    stack: error.stack?.split("\n").slice(0, 12).join("\n"),
+    code: "code" in error && typeof error.code === "string" ? error.code : undefined
+  };
 }
 
 export function hashRequestBody(value: unknown): string {

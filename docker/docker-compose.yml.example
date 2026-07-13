@@ -11,10 +11,14 @@ x-env-files: &env-files
 
 services:
   postgres:
-    <<: *env-files
     image: pgvector/pgvector:pg17
+    environment:
+      POSTGRES_USER: "${POSTGRES_USER:?Set POSTGRES_USER in .env}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}"
+      POSTGRES_DB: "${POSTGRES_DB:?Set POSTGRES_DB in .env}"
+      POSTGRES_APP_PASSWORD: "${POSTGRES_APP_PASSWORD:?Set POSTGRES_APP_PASSWORD in .env}"
     ports:
-      - "${POSTGRES_PORT}:5432"
+      - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
       - ./postgres/init:/docker-entrypoint-initdb.d:ro
@@ -27,11 +31,10 @@ services:
       - agentic-csv
 
   redis:
-    <<: *env-files
     image: redis:8-alpine
     command: ["redis-server", "--appendonly", "yes", "--maxmemory-policy", "noeviction"]
     ports:
-      - "${REDIS_PORT}:6379"
+      - "${REDIS_PORT:-6379}:6379"
     volumes:
       - redis-data:/data
     healthcheck:
@@ -43,11 +46,10 @@ services:
       - agentic-csv
 
   qdrant:
-    <<: *env-files
     image: qdrant/qdrant:v1.16.3
     ports:
-      - "${QDRANT_PORT}:6333"
-      - "${QDRANT_GRPC_PORT}:6334"
+      - "${QDRANT_PORT:-6333}:6333"
+      - "${QDRANT_GRPC_PORT:-6334}:6334"
     volumes:
       - qdrant-data:/qdrant/storage
     healthcheck:
@@ -59,10 +61,16 @@ services:
       - agentic-csv
 
   localstack:
-    <<: *env-files
     image: localstack/localstack:4.11.1
+    environment:
+      SERVICES: "s3"
+      DEBUG: "0"
+      AWS_DEFAULT_REGION: "${S3_REGION:?Set S3_REGION in .env}"
+      AWS_ACCESS_KEY_ID: "${S3_ACCESS_KEY_ID:?Set S3_ACCESS_KEY_ID in .env}"
+      AWS_SECRET_ACCESS_KEY: "${S3_SECRET_ACCESS_KEY:?Set S3_SECRET_ACCESS_KEY in .env}"
+      S3_BUCKET: "${S3_BUCKET:?Set S3_BUCKET in .env}"
     ports:
-      - "${LOCALSTACK_PORT}:4566"
+      - "${LOCALSTACK_PORT:-4566}:4566"
     volumes:
       - localstack-data:/var/lib/localstack
       - ./localstack/init:/etc/localstack/init/ready.d:ro
@@ -81,7 +89,7 @@ services:
   mailpit:
     image: axllent/mailpit:v1.27.4
     ports:
-      - "${SMTP_PORT}:1025"
+      - "${SMTP_PORT:-1025}:1025"
       - "${MAILPIT_UI_PORT:-8025}:8025"
     healthcheck:
       test: ["CMD", "/mailpit", "readyz"]
@@ -94,15 +102,37 @@ services:
   web:
     <<: *env-files
     profiles: ["app"]
+    init: true
+    command: ["pnpm", "turbo", "dev", "--env-mode=loose", "--filter=@agentic-csv/web..."]
     build:
       context: ..
       dockerfile: docker/Dockerfile.web
+      target: development
     ports:
-      - "${APP_PORT}:3000"
+      - "${APP_PORT:-3000}:3000"
     environment:
-      S3_PUBLIC_ENDPOINT: "http://localhost:${LOCALSTACK_PORT}"
+      # The app role is the only PostgreSQL credential available to web/worker.
+      DATABASE_URL: "postgres://agentic_csv_app:${POSTGRES_APP_PASSWORD:?Set POSTGRES_APP_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:?Set POSTGRES_DB in .env}"
+      POSTGRES_USER: "agentic_csv_app"
+      POSTGRES_PASSWORD: "${POSTGRES_APP_PASSWORD:?Set POSTGRES_APP_PASSWORD in .env}"
+      POSTGRES_APP_PASSWORD: ""
+      MIGRATION_DATABASE_URL: ""
+      OPENAI_API_KEY: ""
+      CHOKIDAR_USEPOLLING: "true"
+      WATCHPACK_POLLING: "true"
+      S3_PUBLIC_ENDPOINT: "http://localhost:${LOCALSTACK_PORT:-4566}"
       SMTP_HOST: "mailpit"
       SMTP_PORT: "1025"
+    volumes:
+      - ../apps/web/src:/app/apps/web/src:ro
+      - ../apps/web/public:/app/apps/web/public:ro
+      - ../apps/web/next.config.ts:/app/apps/web/next.config.ts:ro
+      - ../apps/web/postcss.config.mjs:/app/apps/web/postcss.config.mjs:ro
+      - ../packages/application/src:/app/packages/application/src:ro
+      - ../packages/contracts/src:/app/packages/contracts/src:ro
+      - ../packages/domain/src:/app/packages/domain/src:ro
+      - ../packages/infrastructure/src:/app/packages/infrastructure/src:ro
+      - ../packages/infrastructure/drizzle:/app/packages/infrastructure/drizzle:ro
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -125,25 +155,45 @@ services:
       - agentic-csv
 
   migrate:
-    <<: *env-files
     profiles: ["app"]
     image: agentic-csv-analyst-worker
     command: ["./node_modules/.bin/drizzle-kit", "migrate"]
     environment:
-      DATABASE_URL: "postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}"
+      MIGRATION_DATABASE_URL: "postgres://${POSTGRES_USER:?Set POSTGRES_USER in .env}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:?Set POSTGRES_DB in .env}"
     depends_on:
       postgres:
         condition: service_healthy
+    volumes:
+      - ../packages/infrastructure/drizzle:/app/packages/infrastructure/drizzle:ro
     networks:
       - agentic-csv
 
   worker:
     <<: *env-files
     profiles: ["app"]
+    init: true
+    command:
+      ["pnpm", "turbo", "dev", "--env-mode=loose", "--filter=@agentic-csv/worker..."]
     build:
       context: ..
       dockerfile: docker/Dockerfile.worker
+      target: development
     image: agentic-csv-analyst-worker
+    environment:
+      DATABASE_URL: "postgres://agentic_csv_app:${POSTGRES_APP_PASSWORD:?Set POSTGRES_APP_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:?Set POSTGRES_DB in .env}"
+      POSTGRES_USER: "agentic_csv_app"
+      POSTGRES_PASSWORD: "${POSTGRES_APP_PASSWORD:?Set POSTGRES_APP_PASSWORD in .env}"
+      POSTGRES_APP_PASSWORD: ""
+      MIGRATION_DATABASE_URL: ""
+      OPENAI_API_KEY: ""
+      CHOKIDAR_USEPOLLING: "true"
+    volumes:
+      - ../apps/worker/src:/app/apps/worker/src:ro
+      - ../packages/application/src:/app/packages/application/src:ro
+      - ../packages/contracts/src:/app/packages/contracts/src:ro
+      - ../packages/domain/src:/app/packages/domain/src:ro
+      - ../packages/infrastructure/src:/app/packages/infrastructure/src:ro
+      - ../packages/infrastructure/drizzle:/app/packages/infrastructure/drizzle:ro
     depends_on:
       migrate:
         condition: service_completed_successfully

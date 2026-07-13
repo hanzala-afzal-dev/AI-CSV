@@ -18,6 +18,24 @@ const user = {
 };
 
 describe("IdentityService", () => {
+  it("does not send another verification email when registration already exists", async () => {
+    const store = repository();
+    store.register = vi.fn(async () => ({ created: false }));
+    const identityMailer = mailer();
+    const identity = service(store, hasher(), identityMailer);
+
+    await identity.register({
+      email: " Alice@Example.com ",
+      displayName: "Alice",
+      password: "a sufficiently long password"
+    });
+
+    expect(store.register).toHaveBeenCalledWith(
+      expect.objectContaining({ email: "alice@example.com" })
+    );
+    expect(identityMailer.sendEmailVerification).not.toHaveBeenCalled();
+  });
+
   it("returns the same authentication error for missing and incorrect accounts", async () => {
     const missingRepository = repository();
     missingRepository.findLoginIdentity = vi.fn(async () => null);
@@ -72,12 +90,16 @@ describe("IdentityService", () => {
   });
 });
 
-function service(store: IdentityRepository, passwordHasher: PasswordHasher) {
+function service(
+  store: IdentityRepository,
+  passwordHasher: PasswordHasher,
+  identityMailer: IdentityMailer = mailer()
+) {
   return new IdentityService(
     store,
     passwordHasher,
     tokenService(),
-    mailer(),
+    identityMailer,
     {
       sessionIdleTtlSeconds: 1800,
       sessionAbsoluteTtlSeconds: 604800,

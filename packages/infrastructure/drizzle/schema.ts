@@ -1,5 +1,7 @@
+import { sql } from "drizzle-orm";
 import {
   boolean,
+  check,
   index,
   integer,
   jsonb,
@@ -12,17 +14,33 @@ import {
   varchar
 } from "drizzle-orm/pg-core";
 
-export const users = pgTable("users", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  email: varchar("email", { length: 320 }).unique(),
-  pendingEmail: varchar("pending_email", { length: 320 }),
-  displayName: varchar("display_name", { length: 160 }).notNull(),
-  passwordHash: text("password_hash"),
-  emailVerifiedAt: timestamp("email_verified_at", { withTimezone: true }),
-  status: varchar("status", { length: 32 }).notNull().default("api_only"),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
-});
+export const users = pgTable(
+  "users",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    email: varchar("email", { length: 320 }).unique(),
+    pendingEmail: varchar("pending_email", { length: 320 }),
+    displayName: varchar("display_name", { length: 160 }).notNull(),
+    passwordHash: text("password_hash"),
+    emailVerifiedAt: timestamp("email_verified_at", { withTimezone: true }),
+    status: varchar("status", { length: 32 }).notNull().default("api_only"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
+  },
+  (table) => [
+    uniqueIndex("users_email_normalized_unique")
+      .on(sql`lower(${table.email})`)
+      .where(sql`${table.email} is not null`),
+    check(
+      "users_email_normalized_check",
+      sql`${table.email} is null or ${table.email} = lower(btrim(${table.email}))`
+    ),
+    check(
+      "users_pending_email_normalized_check",
+      sql`${table.pendingEmail} is null or ${table.pendingEmail} = lower(btrim(${table.pendingEmail}))`
+    )
+  ]
+);
 
 export const apiKeys = pgTable(
   "api_keys",
@@ -66,7 +84,11 @@ export const sessions = pgTable(
   (table) => [
     uniqueIndex("sessions_token_hash_unique").on(table.tokenHash),
     index("sessions_user_active_idx").on(table.userId, table.revokedAt),
-    index("sessions_expiry_idx").on(table.absoluteExpiresAt)
+    index("sessions_expiry_idx").on(table.absoluteExpiresAt),
+    check(
+      "sessions_expiry_order_check",
+      sql`${table.idleExpiresAt} <= ${table.absoluteExpiresAt}`
+    )
   ]
 );
 
@@ -87,7 +109,11 @@ export const verificationTokens = pgTable(
   (table) => [
     uniqueIndex("verification_tokens_hash_unique").on(table.tokenHash),
     index("verification_tokens_user_purpose_idx").on(table.userId, table.purpose),
-    index("verification_tokens_expiry_idx").on(table.expiresAt)
+    index("verification_tokens_expiry_idx").on(table.expiresAt),
+    check(
+      "verification_tokens_purpose_check",
+      sql`${table.purpose} in ('initial', 'email_change')`
+    )
   ]
 );
 

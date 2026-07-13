@@ -193,6 +193,30 @@ describeIntegration("identity sessions and RLS", () => {
       rows: []
     });
   });
+
+  it("normalizes registration email and refuses a duplicate account", async () => {
+    const duplicate = await app.query(
+      `select public.identity_register($1,$2,$3,$4,$5,$6) as created`,
+      [
+        randomUUID(),
+        "  ALICE.PHASE2@EXAMPLE.COM  ",
+        "Duplicate Alice",
+        "$argon2id$duplicate",
+        "9".repeat(64),
+        expiry
+      ]
+    );
+
+    expect(duplicate.rows).toEqual([{ created: false }]);
+    expect(
+      (
+        await admin.query(
+          `select count(*)::integer as count from users where email = $1`,
+          ["alice.phase2@example.com"]
+        )
+      ).rows
+    ).toEqual([{ count: 1 }]);
+  });
 });
 
 async function asActor<TResult>(

@@ -13,9 +13,10 @@ export function PasswordChangeForm() {
   const [pending, setPending] = useState(false);
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const form = event.currentTarget;
     setPending(true);
     setError(undefined);
-    const data = new FormData(event.currentTarget);
+    const data = new FormData(form);
     if (data.get("newPassword") !== data.get("confirmation")) {
       setError("Passwords do not match.");
       setPending(false);
@@ -27,7 +28,7 @@ export function PasswordChangeForm() {
         newPassword: data.get("newPassword")
       });
       setMessage("Password changed and other sessions revoked.");
-      event.currentTarget.reset();
+      form.reset();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Password change failed.");
     } finally {

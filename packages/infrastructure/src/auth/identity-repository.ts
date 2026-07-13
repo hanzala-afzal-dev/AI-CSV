@@ -283,10 +283,10 @@ interface SessionRow {
   id: string;
   user_id: string;
   csrf_hash: string;
-  created_at: Date;
-  last_seen_at: Date;
-  idle_expires_at: Date;
-  absolute_expires_at: Date;
+  created_at: Date | string;
+  last_seen_at: Date | string;
+  idle_expires_at: Date | string;
+  absolute_expires_at: Date | string;
   email: string;
   pending_email: string | null;
   display_name: string;
@@ -298,10 +298,10 @@ function mapSession(row: SessionRow): AuthenticatedSession {
     id: row.id,
     userId: row.user_id,
     csrfHash: row.csrf_hash,
-    createdAt: row.created_at,
-    lastSeenAt: row.last_seen_at,
-    idleExpiresAt: row.idle_expires_at,
-    absoluteExpiresAt: row.absolute_expires_at,
+    createdAt: databaseDate(row.created_at, "created_at"),
+    lastSeenAt: databaseDate(row.last_seen_at, "last_seen_at"),
+    idleExpiresAt: databaseDate(row.idle_expires_at, "idle_expires_at"),
+    absoluteExpiresAt: databaseDate(row.absolute_expires_at, "absolute_expires_at"),
     user: {
       id: row.user_id,
       email: row.email,
@@ -310,6 +310,14 @@ function mapSession(row: SessionRow): AuthenticatedSession {
       emailVerified: row.email_verified
     }
   };
+}
+
+function databaseDate(value: Date | string, column: string): Date {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    throw new Error(`Identity session contains an invalid ${column} timestamp.`);
+  }
+  return date;
 }
 
 function mapUser(row: typeof users.$inferSelect): SafeIdentityUser {

@@ -43,6 +43,13 @@
       "when": 1783880000000,
       "tag": "0005_identity_least_privilege",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1783934076448,
+      "tag": "0006_identity_email_uniqueness",
+      "breakpoints": true
     }
   ]
 }
