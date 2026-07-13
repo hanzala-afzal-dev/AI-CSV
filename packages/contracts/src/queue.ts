@@ -2,6 +2,7 @@ import { z } from "zod";
 
 export const queueJobNameSchema = z.enum([
   "dataset.ingest.v1",
+  "agent.run.v1",
   "knowledge.index.v1",
   "outbox.publish.v1"
 ]);
@@ -27,6 +28,12 @@ export const knowledgeIndexJobPayloadSchema = queuePayloadBaseSchema.extend({
   datasetId: z.string().uuid().optional()
 });
 
+export const agentRunJobPayloadSchema = queuePayloadBaseSchema.extend({
+  jobName: z.literal("agent.run.v1"),
+  conversationId: z.string().uuid(),
+  runId: z.string().uuid()
+});
+
 export const outboxPublishJobPayloadSchema = queuePayloadBaseSchema.extend({
   jobName: z.literal("outbox.publish.v1"),
   batchSize: z.number().int().positive().max(100)
@@ -34,5 +41,6 @@ export const outboxPublishJobPayloadSchema = queuePayloadBaseSchema.extend({
 
 export type QueueJobName = z.infer<typeof queueJobNameSchema>;
 export type DatasetIngestionJobPayload = z.infer<typeof datasetIngestionJobPayloadSchema>;
+export type AgentRunJobPayload = z.infer<typeof agentRunJobPayloadSchema>;
 export type KnowledgeIndexJobPayload = z.infer<typeof knowledgeIndexJobPayloadSchema>;
 export type OutboxPublishJobPayload = z.infer<typeof outboxPublishJobPayloadSchema>;

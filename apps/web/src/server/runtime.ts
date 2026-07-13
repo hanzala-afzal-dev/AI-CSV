@@ -1,4 +1,8 @@
-import { IdentityService } from "@agentic-csv/application";
+import {
+  ConversationService,
+  IdentityService,
+  ProviderSettingsService
+} from "@agentic-csv/application";
 import { loadEnv, type AppEnv } from "@agentic-csv/infrastructure/config";
 import {
   createDatabaseClient,
@@ -14,6 +18,13 @@ import {
 import { createLogger, type AppLogger } from "@agentic-csv/infrastructure/logging";
 import { RedisRateLimiter } from "@agentic-csv/infrastructure/rate-limit";
 import { createRedisClient, type RedisClient } from "@agentic-csv/infrastructure/redis";
+import {
+  AesGcmCredentialCipher,
+  OpenAiProviderGateway,
+  PostgresConversationRepository,
+  PostgresProviderSettingsRepository
+} from "@agentic-csv/infrastructure";
+import { RedisLeaseLimiter } from "@agentic-csv/infrastructure";
 import { createS3Client, S3ObjectStorage } from "@agentic-csv/infrastructure/storage";
 import { DrizzleUnitOfWork } from "@agentic-csv/infrastructure/unit-of-work";
 
@@ -25,7 +36,10 @@ export interface WebRuntime {
   readonly objectStorage: S3ObjectStorage;
   readonly unitOfWork: DrizzleUnitOfWork;
   readonly rateLimiter: RedisRateLimiter;
+  readonly leaseLimiter: RedisLeaseLimiter;
   readonly identityService: IdentityService;
+  readonly providerSettingsService: ProviderSettingsService;
+  readonly conversationService: ConversationService;
 }
 
 function createRuntime(): WebRuntime {
@@ -42,6 +56,8 @@ function createRuntime(): WebRuntime {
     timeCost: env.ARGON2_TIME_COST,
     parallelism: env.ARGON2_PARALLELISM
   });
+  const providerRepository = new PostgresProviderSettingsRepository(database);
+  const conversationRepository = new PostgresConversationRepository(database);
   return {
     env,
     database,
@@ -50,6 +66,7 @@ function createRuntime(): WebRuntime {
     objectStorage: new S3ObjectStorage(s3Client, env.S3_BUCKET, s3PresignClient),
     unitOfWork: new DrizzleUnitOfWork(database),
     rateLimiter: new RedisRateLimiter(redis, env.REDIS_KEY_PREFIX),
+    leaseLimiter: new RedisLeaseLimiter(redis, env.REDIS_KEY_PREFIX),
     identityService: new IdentityService(
       identityRepository,
       passwordHasher,
@@ -61,7 +78,26 @@ function createRuntime(): WebRuntime {
         verificationTtlSeconds: env.EMAIL_VERIFICATION_TTL_SECONDS,
         passwordResetTtlSeconds: env.PASSWORD_RESET_TTL_SECONDS
       }
-    )
+    ),
+    providerSettingsService: new ProviderSettingsService(
+      providerRepository,
+      new AesGcmCredentialCipher({
+        currentKey: env.APP_ENCRYPTION_KEY,
+        currentKeyVersion: env.APP_ENCRYPTION_KEY_VERSION,
+        ...(env.APP_ENCRYPTION_PREVIOUS_KEYS === undefined
+          ? {}
+          : { previousKeys: env.APP_ENCRYPTION_PREVIOUS_KEYS })
+      }),
+      new OpenAiProviderGateway({
+        baseUrl: env.OPENAI_API_BASE_URL,
+        timeoutMs: env.OPENAI_VALIDATION_TIMEOUT_MS
+      }),
+      {
+        defaultModel: env.DEFAULT_OPENAI_MODEL,
+        defaultReasoningEffort: env.DEFAULT_REASONING_EFFORT
+      }
+    ),
+    conversationService: new ConversationService(conversationRepository)
   };
 }
 

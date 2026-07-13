@@ -3,7 +3,9 @@ import { NextResponse } from "next/server";
 import { ZodError } from "zod";
 import {
   DatasetWorkflowError,
+  ConversationError,
   IdentityError,
+  ProviderError,
   type AuthenticatedSession
 } from "@agentic-csv/application";
 import { DomainError } from "@agentic-csv/domain";
@@ -141,6 +143,69 @@ export async function protectAuthenticatedLogin(userId: string): Promise<void> {
     `auth:login:account:${userId}`,
     getRuntime().env.RATE_LIMIT_LOGIN_MAX_REQUESTS
   );
+}
+
+export function protectProviderValidation(
+  userId: string
+): Promise<Readonly<Record<string, string>>> {
+  return enforceRateLimit(
+    `provider:openai:validation:user:${userId}`,
+    getRuntime().env.RATE_LIMIT_CREDENTIAL_VALIDATION_MAX_REQUESTS
+  );
+}
+
+export function protectConversationSubmission(
+  userId: string
+): Promise<Readonly<Record<string, string>>> {
+  return enforceRateLimit(
+    `conversation:submission:user:${userId}`,
+    getRuntime().env.RATE_LIMIT_CHAT_SUBMISSION_MAX_REQUESTS
+  );
+}
+
+export function protectConversationStream(
+  userId: string
+): Promise<Readonly<Record<string, string>>> {
+  return enforceRateLimit(
+    `conversation:sse:user:${userId}`,
+    getRuntime().env.RATE_LIMIT_SSE_CONNECTION_MAX_REQUESTS
+  );
+}
+
+export async function acquireConversationStreamLease(userId: string): Promise<{
+  readonly leaseId: string;
+  release(): Promise<void>;
+}> {
+  try {
+    await ensureRedisConnected();
+  } catch {
+    throw new HttpError(
+      503,
+      "RATE_LIMIT_UNAVAILABLE",
+      "Request protection is temporarily unavailable."
+    );
+  }
+  const runtime = getRuntime();
+  const key = `conversation:sse:user:${userId}`;
+  const leaseId = crypto.randomUUID();
+  const acquired = await runtime.leaseLimiter.acquire({
+    key,
+    leaseId,
+    limit: runtime.env.SSE_MAX_CONNECTIONS_PER_USER,
+    ttlSeconds: runtime.env.SSE_CONNECTION_LEASE_SECONDS,
+    now: new Date()
+  });
+  if (!acquired) {
+    throw new HttpError(
+      429,
+      "SSE_CONNECTION_LIMIT_EXCEEDED",
+      "Too many conversation streams are already open."
+    );
+  }
+  return {
+    leaseId,
+    release: () => runtime.leaseLimiter.release(key, leaseId)
+  };
 }
 
 export function sessionMetadata(request: Request): {
@@ -290,7 +355,8 @@ export function successResponse(
 
 export function errorResponse(
   error: unknown,
-  correlationId = crypto.randomUUID()
+  correlationId = crypto.randomUUID(),
+  options: { readonly sensitive?: boolean } = {}
 ): NextResponse {
   const runtime = getRuntime();
   const mapped = mapError(error);
@@ -298,7 +364,10 @@ export function errorResponse(
     {
       correlationId,
       code: mapped.code,
-      error: mapped.status >= 500 ? serializeError(error) : undefined
+      error:
+        mapped.status >= 500
+          ? serializeError(error, options.sensitive === true)
+          : undefined
     },
     "API request failed"
   );
@@ -315,9 +384,15 @@ export function errorResponse(
   );
 }
 
-function serializeError(error: unknown): Record<string, unknown> {
+function serializeError(error: unknown, sensitive: boolean): Record<string, unknown> {
   if (!(error instanceof Error)) {
     return { name: "UnknownError" };
+  }
+  if (sensitive) {
+    return {
+      name: error.name,
+      code: "code" in error && typeof error.code === "string" ? error.code : undefined
+    };
   }
   return {
     name: error.name,
@@ -451,6 +526,38 @@ function mapError(error: unknown): {
       EMAIL_UNAVAILABLE: 409,
       SESSION_NOT_FOUND: 404,
       TOKEN_INVALID_OR_EXPIRED: 400
+    };
+    return {
+      status: statusByCode[error.code] ?? 400,
+      code: error.code,
+      message: error.message,
+      headers: {}
+    };
+  }
+  if (error instanceof ProviderError) {
+    const statusByCode: Record<string, number> = {
+      PROVIDER_CREDENTIAL_NOT_CONFIGURED: 404,
+      PROVIDER_KEY_INVALID: 422,
+      PROVIDER_RATE_LIMITED: 429,
+      PROVIDER_UNAVAILABLE: 503,
+      PROVIDER_MODEL_UNAVAILABLE: 422,
+      PROVIDER_REASONING_UNSUPPORTED: 422
+    };
+    return {
+      status: statusByCode[error.code] ?? 400,
+      code: error.code,
+      message: error.message,
+      headers: {}
+    };
+  }
+  if (error instanceof ConversationError) {
+    const statusByCode: Record<string, number> = {
+      CONVERSATION_NOT_FOUND: 404,
+      CONVERSATION_RUN_NOT_FOUND: 404,
+      CONVERSATION_ARCHIVED: 409,
+      CONVERSATION_CONFLICT: 409,
+      CONVERSATION_RUN_ACTIVE: 409,
+      CONVERSATION_REQUEST_ID_REUSED: 409
     };
     return {
       status: statusByCode[error.code] ?? 400,

@@ -1,5 +1,5 @@
-# Copy this file to docker/docker-compose.yml for local development.
-# The copied docker/docker-compose.yml file is intentionally gitignored so local
+# Copy this file to docker/stack.yml for local development.
+# The copied docker/stack.yml file is intentionally gitignored so local
 # Compose changes do not get committed.
 
 name: agentic-csv-analyst
@@ -117,7 +117,6 @@ services:
       POSTGRES_PASSWORD: "${POSTGRES_APP_PASSWORD:?Set POSTGRES_APP_PASSWORD in .env}"
       POSTGRES_APP_PASSWORD: ""
       MIGRATION_DATABASE_URL: ""
-      OPENAI_API_KEY: ""
       CHOKIDAR_USEPOLLING: "true"
       WATCHPACK_POLLING: "true"
       S3_PUBLIC_ENDPOINT: "http://localhost:${LOCALSTACK_PORT:-4566}"
@@ -129,9 +128,11 @@ services:
       - ../apps/web/next.config.ts:/app/apps/web/next.config.ts:ro
       - ../apps/web/postcss.config.mjs:/app/apps/web/postcss.config.mjs:ro
       - ../packages/application/src:/app/packages/application/src:ro
+      - ../packages/application/tsconfig.json:/app/packages/application/tsconfig.json:ro
       - ../packages/contracts/src:/app/packages/contracts/src:ro
       - ../packages/domain/src:/app/packages/domain/src:ro
       - ../packages/infrastructure/src:/app/packages/infrastructure/src:ro
+      - ../packages/infrastructure/tsconfig.json:/app/packages/infrastructure/tsconfig.json:ro
       - ../packages/infrastructure/drizzle:/app/packages/infrastructure/drizzle:ro
     depends_on:
       migrate:
@@ -185,14 +186,15 @@ services:
       POSTGRES_PASSWORD: "${POSTGRES_APP_PASSWORD:?Set POSTGRES_APP_PASSWORD in .env}"
       POSTGRES_APP_PASSWORD: ""
       MIGRATION_DATABASE_URL: ""
-      OPENAI_API_KEY: ""
       CHOKIDAR_USEPOLLING: "true"
     volumes:
       - ../apps/worker/src:/app/apps/worker/src:ro
       - ../packages/application/src:/app/packages/application/src:ro
+      - ../packages/application/tsconfig.json:/app/packages/application/tsconfig.json:ro
       - ../packages/contracts/src:/app/packages/contracts/src:ro
       - ../packages/domain/src:/app/packages/domain/src:ro
       - ../packages/infrastructure/src:/app/packages/infrastructure/src:ro
+      - ../packages/infrastructure/tsconfig.json:/app/packages/infrastructure/tsconfig.json:ro
       - ../packages/infrastructure/drizzle:/app/packages/infrastructure/drizzle:ro
     depends_on:
       migrate:

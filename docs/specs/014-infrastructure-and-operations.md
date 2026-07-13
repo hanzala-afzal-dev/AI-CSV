@@ -25,6 +25,8 @@ The repository exposes explicit root-level commands:
 pnpm docker:build
 pnpm docker:up
 pnpm docker:up:build
+pnpm docker:stop
+pnpm docker:start
 pnpm docker:ps
 pnpm docker:logs
 pnpm docker:down
@@ -36,14 +38,17 @@ from `docker/` use the auto-discovered `compose.yaml`, which loads the root `.en
 the ignored local `stack.yml`. The complete lifecycle is documented in
 [`docker/README.md`](../../docker/README.md).
 
-`docker compose start` is only valid after containers have already been created and then stopped. Normal
-startup uses `pnpm docker:up`, which creates missing containers without rebuilding images.
+The normal daily lifecycle for already-created containers is `pnpm docker:stop` followed by
+`pnpm docker:start`. Use `pnpm docker:up` only to create missing containers or reconcile Compose
+configuration; it does not rebuild unless explicitly requested.
 
 Local application services use dedicated development image targets with bind-mounted source and workspace
 watch tasks. Changes to application or package source must be reflected without rebuilding or replacing
-the `web` or `worker` container. Rebuilds are reserved for dependency manifests, lockfile changes,
-Dockerfiles, Compose configuration, mounted-path changes, and base/system dependency changes. Production
-standalone images remain separate Docker targets and `pnpm build` remains the routine compile check.
+the `web` or `worker` container. Image rebuilds are reserved for dependency manifests, lockfile changes,
+Dockerfiles, and base/system dependency changes. Compose environment, command, health-check, and
+mounted-path changes require a one-time `docker:up` reconciliation of affected containers without an
+image build. Production standalone images remain separate Docker targets and `pnpm build` remains the
+routine compile check.
 
 ## 3. Environment configuration
 
@@ -54,7 +59,7 @@ standalone images remain separate Docker targets and `pnpm build` remains the ro
 - Qdrant URL/collection
 - S3 endpoint, bucket and local credentials
 - auth/session secret
-- `APP_ENCRYPTION_KEY` placeholder and generation instructions
+- `APP_ENCRYPTION_KEY`, its current version, optional previous-key map and generation instructions
 - upload/query limits
 - queue concurrency
 - model defaults
@@ -95,10 +100,25 @@ Rate limiting is delivered with the phase that first exposes each endpoint. It i
 final hardening phase. Redis-backed enforcement fails closed for security-sensitive mutations; any
 documented availability fallback must remain bounded and must not permit unlimited credential or agent calls.
 
+The initial provider-validation policy is configurable through
+`RATE_LIMIT_CREDENTIAL_VALIDATION_MAX_REQUESTS` and defaults to five attempts per configured rate-limit
+window. Credential save, revalidation, model-catalog refresh and preference access validation share this
+authenticated-user bucket.
+
+Conversation controls are independently configurable:
+
+- `RATE_LIMIT_CHAT_SUBMISSION_MAX_REQUESTS` limits accepted prompts per user/window;
+- `RATE_LIMIT_SSE_CONNECTION_MAX_REQUESTS` limits stream opens per user/window;
+- `SSE_MAX_CONNECTIONS_PER_USER` bounds simultaneous streams with fail-closed Redis leases;
+- `SSE_CONNECTION_LEASE_SECONDS` must exceed the server's bounded stream lifetime.
+
+The one-active-run invariant is enforced in PostgreSQL in addition to HTTP rate limits. Queue workers
+atomically claim only `queued` runs, so duplicate transport delivery cannot repeat assistant work.
+
 ## 6. Health
 
-- `/health/live`: process running; no external dependency checks.
-- `/health/ready`: required dependencies reachable and migrations compatible.
+- `/api/health`: process running; no external dependency checks.
+- `/api/ready`: required dependencies reachable and migrations compatible.
 - Worker readiness includes PostgreSQL, Redis and required queue registration.
 - Qdrant/object storage may be required based on feature flags.
 

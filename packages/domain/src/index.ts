@@ -3,6 +3,7 @@ export { AggregateRoot } from "./shared/aggregate-root";
 export { createDomainEvent } from "./shared/domain-event";
 export { DomainError } from "./shared/domain-error";
 export type { DomainErrorCode } from "./shared/domain-error";
+export { createUuidV7 } from "./shared/uuid-v7";
 export { Dataset } from "./dataset/dataset";
 export type { DatasetProps, DatasetProfileStats } from "./dataset/dataset";
 export { DatasetId } from "./dataset/dataset-id";
@@ -11,3 +12,27 @@ export type { DatasetStatus } from "./dataset/dataset-status";
 export { EmailAddress } from "./identity/email-address";
 export { IdentityUser } from "./identity/identity-user";
 export type { IdentityUserProps, IdentityUserStatus } from "./identity/identity-user";
+export {
+  ProviderModelId,
+  ProviderPreference,
+  reasoningEfforts
+} from "./provider/provider-preference";
+export type { ReasoningEffort } from "./provider/provider-preference";
+export {
+  activeAgentRunStatuses,
+  agentRunStatuses,
+  Conversation,
+  conversationMessageRoles,
+  conversationMessageStatuses,
+  conversationStatuses,
+  isActiveAgentRunStatus,
+  normalizeConversationTitle,
+  titleFromFirstMessage
+} from "./conversation/conversation";
+export type {
+  AgentRunStatus,
+  ConversationMessageRole,
+  ConversationMessageStatus,
+  ConversationProps,
+  ConversationStatus
+} from "./conversation/conversation";

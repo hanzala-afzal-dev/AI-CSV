@@ -7,15 +7,16 @@ export interface DomainEvent<TName extends string = string, TPayload = unknown> 
 }
 
 export function createDomainEvent<TName extends string, TPayload>(input: {
-  aggregateId: string;
-  name: TName;
-  payload: TPayload;
+  readonly aggregateId: string;
+  readonly name: TName;
+  readonly payload: TPayload;
+  readonly occurredAt?: Date;
 }): DomainEvent<TName, TPayload> {
   return {
     eventId: crypto.randomUUID(),
     aggregateId: input.aggregateId,
     name: input.name,
     payload: input.payload,
-    occurredAt: new Date()
+    occurredAt: input.occurredAt ?? new Date()
   };
 }

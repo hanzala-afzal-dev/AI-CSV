@@ -73,8 +73,15 @@ Event examples:
 - `chart.ready`
 - `run.completed`
 - `run.failed`
+- `run.cancelled`
 
 SSE is a delivery channel, not the source of truth. Important events/messages are persisted first or transactionally coordinated through an outbox.
+
+- Event IDs are the monotonic per-run sequence rendered as a decimal string.
+- A connection authorizes the run owner, replays every persisted page after `Last-Event-ID`, sends safe
+  heartbeats, and closes on a terminal run or a bounded connection lifetime so the browser reconnects.
+- Submission and stream-open frequency have separate per-user Redis limits. Concurrent streams use
+  expiring per-user leases and fail closed when Redis is unavailable.
 
 ## 6. Ordering and concurrency
 
@@ -84,10 +91,19 @@ SSE is a delivery channel, not the source of truth. Important events/messages ar
   transactionally acquired lock; an application-only preflight check is insufficient.
 - A second prompt while a run is active is rejected with `CONVERSATION_RUN_ACTIVE` or queued according to an explicit future feature.
 - The user may cancel a running run.
+- A queue delivery may claim only a queued run. Duplicate or retried deliveries after the atomic
+  `queued -> running` transition perform no assistant work.
 - Allocate message and run-event sequence numbers transactionally while locking the owning
   conversation/run row so concurrent requests cannot produce duplicate or reordered sequences.
 
-## 7. Conversation deletion
+## 7. Phase 4 delivery boundary
+
+Phase 4 uses a deterministic responder behind the same application port and asynchronous outbox/worker
+path as the later agent. It persists one safe text response and proves CRUD, reload, cancellation and
+stream replay without sending a provider credential to a model. CSV-backed behavior begins in Phase 5;
+real OpenAI/LangGraph execution replaces this responder in Phase 7.
+
+## 8. Conversation deletion
 
 Deletion removes or schedules removal of:
 
@@ -98,7 +114,7 @@ Deletion removes or schedules removal of:
 
 It does not automatically delete the dataset if that dataset is referenced by another conversation. Deleting a dataset must make dependent conversations show a deleted-dataset state while preserving chat text until the user deletes the conversation.
 
-## 8. Acceptance scenarios
+## 9. Acceptance scenarios
 
 ```gherkin
 Scenario: conversation survives reload

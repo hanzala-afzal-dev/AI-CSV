@@ -84,13 +84,13 @@ Persist:
 ```ts
 type DatasetIngestJobV1 = {
   version: 1;
-  jobId: string;
+  jobName: "dataset.ingest.v1";
+  correlationId: string;
+  idempotencyKey: string;
   userId: string;
   datasetId: string;
   datasetVersionId: string;
   objectKey: string;
-  checksum?: string;
-  requestedAt: string;
 };
 ```
 
@@ -102,6 +102,8 @@ Worker rules:
 - Update persisted progress.
 - Retry transient storage/database failures with bounded exponential backoff.
 - Do not retry permanent parsing/validation failures.
+- Treat the payload as a routing hint only. The worker sets the actor context and reloads the dataset,
+  version, expected object key, size and checksum from PostgreSQL before reading storage.
 
 ## 9. Deletion
 
@@ -136,3 +138,33 @@ Scenario: object path isolation
   Then its object key begins with users/{Alice.userId}/
   And Bob cannot obtain a presigned read or write URL for that object
 ```
+
+## 11. Phase 5 implementation slice
+
+Phase 5 completes the existing upload scaffold as one user-visible workflow. Its canonical HTTP sequence
+is `POST /datasets`, `POST /datasets/:id/upload`, direct `PUT` to the returned signed URL, then idempotent
+`POST /datasets/:id/upload/complete`. The client polls or refreshes authenticated dataset detail/profile
+state; ingestion progress is durable and does not depend on keeping the page open.
+
+Required implementation order:
+
+1. Reconcile dataset/version/profile/column schema and lifecycle constraints. Every tenant-crossing
+   relation includes `user_id`, every new tenant table has forced RLS, and the application role receives
+   only the columns and mutations required by repositories.
+2. Add strict safe response contracts for dataset list, detail and version profile. Remove `userId` and
+   internal object keys from browser responses; upload intents may return only the short-lived signed URL,
+   required headers, intent/version IDs and expiry needed for the direct upload.
+3. Add upload-specific per-user and IP limits before signing or verifying storage requests. Browser
+   mutations require trusted origin and session-bound CSRF; completion remains idempotent by header plus
+   request hash.
+4. In the worker, acquire a database-backed claim, reload ownership/state, verify the stored object again,
+   use randomized bounded temporary storage, and perform content validation before DuckDB profiling.
+   Permanent file errors persist a safe code; transient dependency errors use bounded queue retry.
+5. Persist a versioned profile and column summaries, mark the version/dataset `ready`, and expose concise
+   schema-derived suggested prompts. Optional Parquet may be created only after the original CSV profile
+   succeeds and its object key/checksum are persisted.
+6. Integrate an accessible CSV picker/progress surface into the chat empty state using reusable dataset
+   components. It must survive navigation/reload and render pending, uploading, queued, validating,
+   profiling, ready, retryable failure and permanent validation failure without exposing signed URLs.
+
+Phase 5 does not execute arbitrary analysis queries, call the LLM, create embeddings, or add memory.
