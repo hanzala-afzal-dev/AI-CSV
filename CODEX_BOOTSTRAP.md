@@ -231,6 +231,9 @@ agentic-csv-analyst/
 │   ├── architecture.md
 │   └── adr/
 ├── docker/
+│   ├── compose.yaml
+│   ├── docker-compose.yml.example
+│   ├── .env.example
 │   ├── Dockerfile.web
 │   ├── Dockerfile.worker
 │   ├── localstack/init/
@@ -249,7 +252,6 @@ agentic-csv-analyst/
 ├── .env.test
 ├── .gitignore
 ├── .npmrc
-├── compose.yaml
 ├── CONTRIBUTING.md
 ├── drizzle.config.ts
 ├── eslint.config.mjs
@@ -863,8 +865,11 @@ Requirements:
 - web image must run Next.js standalone output
 - worker image must run compiled JavaScript
 - include a useful `.dockerignore`
+- keep separate development targets for long-running local containers and production runner targets
+- bind-mount source into local application containers and run workspace watch tasks so code changes do not
+  require image rebuilds or container replacement
 
-Create `compose.yaml` with these services:
+Create the auto-discovered `docker/compose.yaml` wrapper and local stack template with these services:
 
 ### `postgres`
 
@@ -903,6 +908,7 @@ Create `compose.yaml` with these services:
 - overrides host service URLs with Docker-internal hostnames
 - exposes application port
 - includes a health check against `/api/health`
+- uses the development target and bind-mounted source for the local Compose workflow
 
 ### `worker`
 
@@ -911,6 +917,7 @@ Create `compose.yaml` with these services:
 - depends on healthy infrastructure
 - uses Docker-internal service URLs
 - uses a graceful stop period
+- uses the development target and bind-mounted source for the local Compose workflow
 
 Use one internal bridge network and named volumes.
 
@@ -918,28 +925,28 @@ Required workflows must work:
 
 ```bash
 # Validate Compose
-docker compose --profile app config
+docker compose --env-file .env -f docker/compose.yaml --profile app config --quiet
 
 # Infrastructure only
-docker compose up -d postgres redis qdrant localstack
+docker compose --env-file .env -f docker/compose.yaml up -d postgres redis qdrant localstack mailpit
 
 # Build application images
-docker compose --profile app build web worker
+docker compose --env-file .env -f docker/compose.yaml --profile app build web worker
 
 # Build and run full stack
-docker compose --profile app up -d --build
+docker compose --env-file .env -f docker/compose.yaml --profile app up -d --build
 
 # Check status
-docker compose --profile app ps
+docker compose --env-file .env -f docker/compose.yaml --profile app ps
 
 # Follow logs
-docker compose --profile app logs -f --tail=200
+docker compose --env-file .env -f docker/compose.yaml --profile app logs -f --tail=200
 
 # Stop while preserving data
-docker compose --profile app down
+docker compose --env-file .env -f docker/compose.yaml --profile app down
 
 # Reset all local data
-docker compose --profile app down -v --remove-orphans
+docker compose --env-file .env -f docker/compose.yaml --profile app down -v --remove-orphans
 ```
 
 ---
@@ -961,19 +968,23 @@ Provide root scripts equivalent to:
   "db:generate": "drizzle-kit generate",
   "db:migrate": "drizzle-kit migrate",
   "db:studio": "drizzle-kit studio",
-  "infra:up": "docker compose up -d postgres redis qdrant localstack",
-  "infra:down": "docker compose down",
-  "infra:reset": "docker compose down -v --remove-orphans",
-  "docker:config": "docker compose --profile app config",
-  "docker:pull": "docker compose pull postgres redis qdrant localstack",
-  "docker:build": "docker compose --profile app build web worker",
-  "docker:up": "docker compose --profile app up -d",
-  "docker:up:build": "docker compose --profile app up -d --build",
-  "docker:rebuild": "docker compose --profile app up -d --build --force-recreate",
-  "docker:ps": "docker compose --profile app ps",
-  "docker:logs": "docker compose --profile app logs -f --tail=200",
-  "docker:down": "docker compose --profile app down",
-  "docker:reset": "docker compose --profile app down -v --remove-orphans",
+  "infra:up": "docker compose --env-file .env -f docker/compose.yaml up -d postgres redis qdrant localstack mailpit",
+  "infra:down": "docker compose --env-file .env -f docker/compose.yaml down",
+  "infra:reset": "docker compose --env-file .env -f docker/compose.yaml down -v --remove-orphans",
+  "docker:config": "docker compose --env-file .env -f docker/compose.yaml --profile app config --quiet",
+  "docker:pull": "docker compose --env-file .env -f docker/compose.yaml pull postgres redis qdrant localstack mailpit",
+  "docker:build": "docker compose --env-file .env -f docker/compose.yaml --profile app build web worker",
+  "docker:build:web:production": "docker build --file docker/Dockerfile.web --target runner --tag agentic-csv-analyst-web:production .",
+  "docker:build:worker:production": "docker build --file docker/Dockerfile.worker --target runner --tag agentic-csv-analyst-worker:production .",
+  "docker:up": "docker compose --env-file .env -f docker/compose.yaml --profile app up -d",
+  "docker:up:build": "docker compose --env-file .env -f docker/compose.yaml --profile app up -d --build",
+  "docker:rebuild": "docker compose --env-file .env -f docker/compose.yaml --profile app up -d --build --force-recreate",
+  "docker:stop": "docker compose --env-file .env -f docker/compose.yaml --profile app stop",
+  "docker:start": "docker compose --env-file .env -f docker/compose.yaml --profile app start",
+  "docker:ps": "docker compose --env-file .env -f docker/compose.yaml --profile app ps",
+  "docker:logs": "docker compose --env-file .env -f docker/compose.yaml --profile app logs -f --tail=200",
+  "docker:down": "docker compose --env-file .env -f docker/compose.yaml --profile app down",
+  "docker:reset": "docker compose --env-file .env -f docker/compose.yaml --profile app down -v --remove-orphans",
   "env:check": "node scripts/check-env.mjs",
   "ci": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build"
 }
@@ -1232,10 +1243,10 @@ pnpm lint
 pnpm typecheck
 pnpm test
 pnpm build
-docker compose --profile app config
-docker compose --profile app build web worker
-docker compose --profile app up -d
-docker compose --profile app ps
+pnpm docker:config
+pnpm docker:build
+pnpm docker:up
+pnpm docker:ps
 ```
 
 After startup, verify:
@@ -1252,7 +1263,7 @@ The worker starts and remains healthy/running
 Then stop the stack while preserving data:
 
 ```bash
-docker compose --profile app down
+pnpm docker:down
 ```
 
 If Docker, network access, or another external dependency is unavailable in the execution environment:
@@ -1279,7 +1290,7 @@ The task is complete only when all applicable items are true:
 - [ ] Environment validation fails clearly on invalid values.
 - [ ] PostgreSQL, Redis, Qdrant, and LocalStack are defined with persistent volumes.
 - [ ] Web and worker images build from separate Dockerfiles.
-- [ ] `docker compose --profile app up -d --build` is documented.
+- [ ] `pnpm docker:up:build` is documented.
 - [ ] Health and readiness routes return structured responses.
 - [ ] The worker handles graceful shutdown.
 - [ ] Queue jobs are versioned and Zod-validated.

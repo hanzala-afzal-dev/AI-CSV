@@ -20,7 +20,9 @@
 - Structured logging and health/readiness.
 - Drizzle migrations and base operational tables.
 
-**Done when:** `docker compose up -d --build` produces healthy services and the local quality gate runs from the lockfile. Hosted CI is optional until explicitly enabled.
+**Done when:** the initial `pnpm docker:up:build` produces healthy services, subsequent source changes are
+picked up by stable development containers without rebuilds, production targets compile, and the local
+quality gate runs from the lockfile. Hosted CI is optional until explicitly enabled.
 
 ## Phase 2 — Identity and tenant boundary
 

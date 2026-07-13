@@ -12,6 +12,7 @@ export default defineConfig({
   },
   resolve: {
     alias: {
+      "@": new URL("./apps/web/src", import.meta.url).pathname,
       "@agentic-csv/infrastructure/auth": new URL(
         "./packages/infrastructure/src/auth/api-key.ts",
         import.meta.url
@@ -26,6 +27,10 @@ export default defineConfig({
       ).pathname,
       "@agentic-csv/infrastructure/logging": new URL(
         "./packages/infrastructure/src/logging/logger.ts",
+        import.meta.url
+      ).pathname,
+      "@agentic-csv/infrastructure/identity": new URL(
+        "./packages/infrastructure/src/auth/index.ts",
         import.meta.url
       ).pathname,
       "@agentic-csv/infrastructure/rate-limit": new URL(

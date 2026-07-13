@@ -11,6 +11,7 @@
   },
   "scripts": {
     "build": "tsup src/index.ts --format esm --dts --clean",
+    "dev": "tsup src/index.ts --format esm --dts --watch",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run tests/*.test.ts --passWithNoTests",

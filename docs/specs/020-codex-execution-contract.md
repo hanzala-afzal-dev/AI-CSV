@@ -73,12 +73,12 @@ pnpm typecheck
 pnpm test
 pnpm test:integration
 pnpm build
-docker compose config
-docker compose build
-docker compose up -d
+pnpm docker:config
+pnpm docker:build
+pnpm docker:up
 
-docker compose ps
-docker compose logs --no-color web worker
+pnpm docker:ps
+docker compose --env-file .env -f docker/compose.yaml --profile app logs --no-color web worker
 ```
 
 Commands for capabilities not yet introduced may be documented as not applicable, but every implemented

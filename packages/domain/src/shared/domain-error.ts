@@ -4,7 +4,9 @@ export type DomainErrorCode =
   | "DATASET_STATUS_TRANSITION_INVALID"
   | "DATASET_PROFILE_STATS_INVALID"
   | "DATASET_FAILURE_REASON_REQUIRED"
-  | "DATASET_OBJECT_KEY_REQUIRED";
+  | "DATASET_OBJECT_KEY_REQUIRED"
+  | "IDENTITY_EMAIL_INVALID"
+  | "IDENTITY_DISPLAY_NAME_INVALID";
 
 export class DomainError extends Error {
   public readonly code: DomainErrorCode;

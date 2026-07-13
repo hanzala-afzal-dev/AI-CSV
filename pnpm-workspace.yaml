@@ -3,6 +3,7 @@ packages:
   - packages/*
   - packages/config/*
 allowBuilds:
+  argon2: true
   esbuild: true
   msgpackr-extract: true
   sharp: true

@@ -19,18 +19,31 @@ DuckDB is embedded in `worker`/analysis process and does not need a Compose serv
 
 ## 2. Docker commands
 
-The repository must expose explicit commands:
+The repository exposes explicit root-level commands:
 
 ```bash
-docker compose build
-docker compose up -d --build
-docker compose ps
-docker compose logs -f web worker
-docker compose down
-docker compose down -v --remove-orphans
+pnpm docker:build
+pnpm docker:up
+pnpm docker:up:build
+pnpm docker:ps
+pnpm docker:logs
+pnpm docker:down
+pnpm docker:reset
 ```
 
-Equivalent package/Makefile shortcuts may exist but must not hide the underlying Compose workflow from documentation.
+These scripts call `docker compose --env-file .env -f docker/compose.yaml` explicitly. Direct commands
+from `docker/` use the auto-discovered `compose.yaml`, which loads the root `.env` before interpolating
+the ignored local `stack.yml`. The complete lifecycle is documented in
+[`docker/README.md`](../../docker/README.md).
+
+`docker compose start` is only valid after containers have already been created and then stopped. Normal
+startup uses `pnpm docker:up`, which creates missing containers without rebuilding images.
+
+Local application services use dedicated development image targets with bind-mounted source and workspace
+watch tasks. Changes to application or package source must be reflected without rebuilding or replacing
+the `web` or `worker` container. Rebuilds are reserved for dependency manifests, lockfile changes,
+Dockerfiles, Compose configuration, mounted-path changes, and base/system dependency changes. Production
+standalone images remain separate Docker targets and `pnpm build` remains the routine compile check.
 
 ## 3. Environment configuration
 

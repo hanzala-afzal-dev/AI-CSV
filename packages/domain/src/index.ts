@@ -8,3 +8,6 @@ export type { DatasetProps, DatasetProfileStats } from "./dataset/dataset";
 export { DatasetId } from "./dataset/dataset-id";
 export { datasetStatuses } from "./dataset/dataset-status";
 export type { DatasetStatus } from "./dataset/dataset-status";
+export { EmailAddress } from "./identity/email-address";
+export { IdentityUser } from "./identity/identity-user";
+export type { IdentityUserProps, IdentityUserStatus } from "./identity/identity-user";
