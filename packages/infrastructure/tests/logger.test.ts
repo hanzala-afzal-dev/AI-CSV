@@ -9,6 +9,9 @@ describe("logger redaction", () => {
         "headers.authorization",
         "req.headers.authorization",
         "apiKey",
+        "ciphertext",
+        "*.authTag",
+        "APP_ENCRYPTION_KEY",
         "uploadUrl",
         "*.password"
       ])

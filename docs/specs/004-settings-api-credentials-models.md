@@ -21,6 +21,16 @@ Supported actions:
 - Revalidate key.
 - Delete/revoke the local encrypted copy.
 
+Operation semantics:
+
+- `PUT .../credential` validates the submitted key first and atomically activates the replacement only
+  after validation succeeds. An invalid replacement leaves the existing credential unchanged.
+- `POST .../validate` revalidates only the already-saved credential. It never accepts a transient key.
+- `GET .../models` is read-only. It may call OpenAI with the saved key but does not change credential or
+  preference state.
+- Deletion removes the encrypted secret material and provider preferences in one transaction. A safe
+  audit event remains.
+
 The UI accepts a full key only in a password-style input. After submission, the frontend must immediately clear the value. Subsequent reads return only:
 
 ```ts
@@ -38,9 +48,12 @@ type ProviderCredentialSummary = {
 
 ### Development/self-hosted baseline
 
-- The server reads a 256-bit `APP_ENCRYPTION_KEY` from environment/secret injection.
-- Derive or identify a key version.
-- Encrypt each provider key using AES-256-GCM or XChaCha20-Poly1305 with a unique random nonce.
+- The server reads a base64-encoded 256-bit `APP_ENCRYPTION_KEY` and an explicit
+  `APP_ENCRYPTION_KEY_VERSION` from environment/secret injection.
+- Previous versioned keys may be supplied through `APP_ENCRYPTION_PREVIOUS_KEYS` during rotation. New
+  writes always use the current version; reads select a key by the stored version.
+- Encrypt each provider key using AES-256-GCM with a unique 96-bit random nonce and 128-bit
+  authentication tag.
 - Bind associated authenticated data to `userId`, provider and credential record ID.
 - Store ciphertext, nonce, authentication tag (if separate), algorithm and key version.
 - Store a non-secret display suffix (`last4`) and optional keyed fingerprint for duplicate detection.
@@ -62,6 +75,7 @@ Use envelope encryption with a cloud KMS or secret manager:
 - Logging request bodies on credential endpoints.
 - Returning the full key after save.
 - Reusing one static nonce.
+- Activating or deleting a credential outside the transaction that records its audit event.
 
 ## 4. Validation
 
@@ -73,13 +87,21 @@ A server-side validation use case:
 4. Maps provider errors to stable safe codes such as `PROVIDER_KEY_INVALID`, `PROVIDER_RATE_LIMITED`, `PROVIDER_UNAVAILABLE`.
 5. Never forwards raw provider error payloads that may include sensitive request data.
 
+Initial validation uses the authenticated `GET /v1/models` API. A successful response proves the key can
+authenticate and supplies account-accessible model IDs without incurring a model inference request.
+Validation has a strict timeout, no automatic retry and a dedicated fail-closed per-user Redis limit.
+
 ## 5. Model catalog
 
-- Fetch available models server-side using the user's decrypted key or maintain a curated compatible catalog and validate access.
-- Cache only non-secret model metadata for a short period per user.
+- Fetch account-accessible model IDs server-side using the user's decrypted key and intersect them with a
+  version-controlled compatibility map.
+- The initial implementation fetches model access on demand under the dedicated validation limit so
+  revoked access is not hidden by stale entitlement data. Any later cache may contain only short-lived,
+  non-secret model metadata scoped per user and must be invalidated on credential changes.
 - Filter to models compatible with the Responses API and required structured/tool capabilities.
 - Model IDs are data, not TypeScript enum constants; provider catalogs evolve.
 - Persist selected `model_id`, `reasoning_effort`, optional `reasoning_mode` and validation timestamp.
+- Catalog reads never return provider ownership metadata or any credential material.
 
 ## 6. Default selection
 
@@ -111,16 +133,23 @@ Treat supported values as model-dependent. The UI obtains allowed values from a 
 OpenAI is the only MVP provider. Define a narrow provider port so future Gemini or Claude support does not change domain entities:
 
 ```ts
-interface AiProviderGateway {
+interface ProviderSettingsGateway {
   validateCredential(secret: SecretValue): Promise<CredentialValidationResult>;
   listCompatibleModels(secret: SecretValue): Promise<ProviderModel[]>;
-  createResponse(request: ProviderResponseRequest): Promise<ProviderResponse>;
 }
 ```
 
-Do not implement unused providers yet.
+Add the response-generation port in the agent/conversation phase that consumes it. Do not expand this
+settings port or implement unused providers ahead of their owning phase.
 
-## 9. Acceptance scenarios
+## 9. Audit events
+
+Persist safe events for credential add, replace, validation success/failure, deletion, automatic model
+fallback and preference changes. Events contain user ID, event type, outcome, correlation ID, timestamps
+and allow-listed non-secret metadata only. They never contain the key, ciphertext, nonce, authentication
+tag, fingerprint, raw provider response or full model catalog.
+
+## 10. Acceptance scenarios
 
 ```gherkin
 Scenario: key is saved securely
@@ -146,7 +175,7 @@ Scenario: model unavailable
   And the user can select a compatible accessible model
 ```
 
-## 10. References
+## 11. References
 
 - OpenAI states API keys must not be deployed in client-side environments and recommends routing requests through a backend: https://help.openai.com/en/articles/5112595-best-practices-for-api-key-safety
 - OpenAI documents model-dependent reasoning effort and `medium` as the default for `gpt-5.5`: https://developers.openai.com/api/docs/guides/reasoning

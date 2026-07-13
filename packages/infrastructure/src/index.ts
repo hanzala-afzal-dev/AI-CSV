@@ -15,6 +15,7 @@ export { HmacSecureTokenService } from "./auth/secure-token";
 export { createBullMqConnectionOptions, createRedisClient } from "./redis/client";
 export type { RedisClient, RedisConnectionOptions } from "./redis/client";
 export {
+  createAgentRunQueue,
   createDatasetIngestionQueue,
   defaultJobOptions,
   queueNames,
@@ -23,6 +24,7 @@ export {
 export type { QueueName } from "./queue/queues";
 export { OutboxDispatcher } from "./queue/outbox-dispatcher";
 export { RedisRateLimiter } from "./rate-limit/rate-limiter";
+export { RedisLeaseLimiter } from "./rate-limit/lease-limiter";
 export type {
   RateLimitDecision,
   RateLimitInput,
@@ -34,8 +36,6 @@ export {
   ensureKnowledgeCollection,
   isQdrantReady
 } from "./vector/qdrant";
-export { DuckDbAnalyticsFactory } from "./analytics/duckdb";
-export type { DuckDbFactoryOptions } from "./analytics/duckdb";
 export {
   checkPostgres,
   checkQdrant,
@@ -48,3 +48,13 @@ export type {
   DependencyStatus,
   ReadinessReport
 } from "./health/readiness";
+export {
+  AesGcmCredentialCipher,
+  OpenAiProviderGateway,
+  PostgresProviderSettingsRepository
+} from "./providers";
+export type { CredentialCipherConfig, OpenAiProviderGatewayConfig } from "./providers";
+export {
+  DeterministicConversationResponder,
+  PostgresConversationRepository
+} from "./conversations";

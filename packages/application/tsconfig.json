@@ -1,7 +1,12 @@
 {
   "extends": "../config/typescript/node.json",
   "compilerOptions": {
-    "rootDir": ".",
+    "baseUrl": ".",
+    "paths": {
+      "@agentic-csv/contracts": ["../contracts/src/index.ts"],
+      "@agentic-csv/domain": ["../domain/src/index.ts"]
+    },
+    "rootDir": "..",
     "outDir": "dist"
   },
   "include": ["src/**/*.ts", "tests/**/*.ts"]

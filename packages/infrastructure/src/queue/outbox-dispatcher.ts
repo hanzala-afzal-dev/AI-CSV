@@ -1,21 +1,26 @@
 import { createHash } from "node:crypto";
-import { and, asc, eq, isNull } from "drizzle-orm";
-import { datasetIngestionJobPayloadSchema } from "@agentic-csv/contracts";
+import { and, asc, eq, inArray, isNull } from "drizzle-orm";
+import {
+  agentRunJobPayloadSchema,
+  datasetIngestionJobPayloadSchema
+} from "@agentic-csv/contracts";
 import { outboxEvents } from "../../drizzle/schema";
 import type { DatabaseClient } from "../database/client";
 import type { AppLogger } from "../logging/logger";
-import { createDatasetIngestionQueue } from "./queues";
+import { createAgentRunQueue, createDatasetIngestionQueue } from "./queues";
 import type { AppEnv } from "../config/env";
 
 export class OutboxDispatcher {
-  private readonly queue;
+  private readonly datasetQueue;
+  private readonly agentRunQueue;
 
   public constructor(
     private readonly database: DatabaseClient,
     env: AppEnv,
     private readonly logger: AppLogger
   ) {
-    this.queue = createDatasetIngestionQueue(env);
+    this.datasetQueue = createDatasetIngestionQueue(env);
+    this.agentRunQueue = createAgentRunQueue(env);
   }
 
   public async dispatchBatch(limit = 25): Promise<number> {
@@ -25,7 +30,10 @@ export class OutboxDispatcher {
       .where(
         and(
           isNull(outboxEvents.publishedAt),
-          eq(outboxEvents.eventName, "queue.dataset.ingest.v1")
+          inArray(outboxEvents.eventName, [
+            "queue.dataset.ingest.v1",
+            "queue.agent.run.v1"
+          ])
         )
       )
       .orderBy(asc(outboxEvents.occurredAt))
@@ -34,9 +42,13 @@ export class OutboxDispatcher {
     let published = 0;
     for (const event of pending) {
       try {
-        const payload = datasetIngestionJobPayloadSchema.parse(event.payload);
+        const payload = parseQueuePayload(event.eventName, event.payload);
         const jobId = createHash("sha256").update(payload.idempotencyKey).digest("hex");
-        await this.queue.add(payload.jobName, payload, { jobId });
+        if (payload.jobName === "agent.run.v1") {
+          await this.agentRunQueue.add(payload.jobName, payload, { jobId });
+        } else {
+          await this.datasetQueue.add(payload.jobName, payload, { jobId });
+        }
         await this.database
           .update(outboxEvents)
           .set({ publishedAt: new Date(), attempts: event.attempts + 1, lastError: null })
@@ -60,6 +72,12 @@ export class OutboxDispatcher {
   }
 
   public async close(): Promise<void> {
-    await this.queue.close();
+    await Promise.all([this.datasetQueue.close(), this.agentRunQueue.close()]);
   }
+}
+
+function parseQueuePayload(eventName: string, payload: unknown) {
+  return eventName === "queue.agent.run.v1"
+    ? agentRunJobPayloadSchema.parse(payload)
+    : datasetIngestionJobPayloadSchema.parse(payload);
 }

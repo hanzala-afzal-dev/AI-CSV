@@ -57,3 +57,48 @@ export type {
   SecureTokenService,
   SessionSummary
 } from "./identity/ports";
+export { ProviderError } from "./providers/provider-error";
+export type { ProviderErrorCode } from "./providers/provider-error";
+export { ProviderSettingsService } from "./providers/provider-settings-service";
+export type {
+  ProviderCredentialSummary,
+  ProviderSettingsPolicy,
+  ProviderSettingsResult,
+  ProviderSettingsView
+} from "./providers/provider-settings-service";
+export { SecretValue } from "./providers/secret-value";
+export { ConversationError } from "./conversations/conversation-error";
+export type { ConversationErrorCode } from "./conversations/conversation-error";
+export { ConversationRunService } from "./conversations/conversation-run-service";
+export { ConversationService } from "./conversations/conversation-service";
+export type {
+  AgentRunView,
+  ConversationCursor,
+  ConversationDetailView,
+  ConversationMessageView,
+  ConversationPage,
+  ConversationRepository,
+  ConversationResponder,
+  ConversationRunWork,
+  ConversationSubmission,
+  RunEventPage,
+  RunEventType,
+  RunEventView
+} from "./conversations/ports";
+export type {
+  AiProvider,
+  AiProviderGateway,
+  CredentialCipher,
+  CredentialEncryptionContext,
+  CredentialValidationResult,
+  EncryptedSecretMaterial,
+  ProviderModel,
+  ProviderSettingsRepository,
+  ProviderSettingsSnapshot,
+  SecurityAuditEventType,
+  SecurityAuditInput,
+  StoredCredentialStatus,
+  StoredCredentialSummary,
+  StoredEncryptedCredential,
+  StoredProviderPreference
+} from "./providers/ports";

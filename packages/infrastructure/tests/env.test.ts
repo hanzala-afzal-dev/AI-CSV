@@ -8,6 +8,9 @@ const validEnv = {
   APP_PORT: "3000",
   LOG_LEVEL: "silent",
   AUTH_SECRET: "test-secret-at-least-32-characters",
+  APP_ENCRYPTION_KEY: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+  APP_ENCRYPTION_KEY_VERSION: "test-v1",
+  APP_ENCRYPTION_PREVIOUS_KEYS: "",
   POSTGRES_USER: "agentic_csv_test",
   POSTGRES_PASSWORD: "agentic_csv_test_password",
   POSTGRES_DB: "agentic_csv_test",
@@ -40,8 +43,10 @@ const validEnv = {
   S3_FORCE_PATH_STYLE: "true",
   UPLOAD_MAX_BYTES: "10485760",
   PRESIGNED_URL_TTL_SECONDS: "60",
-  OPENAI_API_KEY: "",
-  OPENAI_CHAT_MODEL: "gpt-5-mini",
+  OPENAI_API_BASE_URL: "https://api.openai.com/v1",
+  OPENAI_VALIDATION_TIMEOUT_MS: "1000",
+  DEFAULT_OPENAI_MODEL: "gpt-5.5",
+  DEFAULT_REASONING_EFFORT: "medium",
   OPENAI_EMBEDDING_MODEL: "text-embedding-3-small",
   LANGSMITH_TRACING: "false",
   LANGSMITH_API_KEY: "",
@@ -61,7 +66,7 @@ describe("parseEnv", () => {
     if (result.success) {
       expect(result.data.APP_PORT).toBe(3000);
       expect(result.data.S3_FORCE_PATH_STYLE).toBe(true);
-      expect(result.data.OPENAI_API_KEY).toBeUndefined();
+      expect(result.data.APP_ENCRYPTION_PREVIOUS_KEYS).toBeUndefined();
     }
   });
 
@@ -81,5 +86,18 @@ describe("parseEnv", () => {
     if (!result.success) {
       expect(result.error.message).toContain("S3_FORCE_PATH_STYLE");
     }
+  });
+
+  it("rejects malformed encryption keys and insecure production provider URLs", () => {
+    expect(
+      parseEnv({ ...validEnv, APP_ENCRYPTION_KEY: "not-a-32-byte-key" }).success
+    ).toBe(false);
+    expect(
+      parseEnv({
+        ...validEnv,
+        NODE_ENV: "production",
+        OPENAI_API_BASE_URL: "http://provider.internal/v1"
+      }).success
+    ).toBe(false);
   });
 });

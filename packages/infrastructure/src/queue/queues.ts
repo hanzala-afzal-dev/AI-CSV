@@ -1,11 +1,15 @@
 import { Queue } from "bullmq";
 import type { JobsOptions, QueueOptions } from "bullmq";
-import type { DatasetIngestionJobPayload } from "@agentic-csv/contracts";
+import type {
+  AgentRunJobPayload,
+  DatasetIngestionJobPayload
+} from "@agentic-csv/contracts";
 import type { AppEnv } from "../config/env";
 import { createBullMqConnectionOptions } from "../redis/client";
 
 export const queueNames = {
   datasetIngestion: "dataset-ingestion",
+  agentRun: "agent-run",
   knowledgeIndexing: "knowledge-indexing",
   outboxPublishing: "outbox-publishing"
 } as const;
@@ -43,4 +47,8 @@ export function createDatasetIngestionQueue(env: AppEnv) {
     queueNames.datasetIngestion,
     queueOptions(env)
   );
+}
+
+export function createAgentRunQueue(env: AppEnv) {
+  return new Queue<AgentRunJobPayload>(queueNames.agentRun, queueOptions(env));
 }
