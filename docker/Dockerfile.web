@@ -12,6 +12,16 @@ COPY packages ./packages
 COPY apps ./apps
 RUN pnpm install --frozen-lockfile
 
+FROM deps AS development
+ENV NODE_ENV=development
+ENV NEXT_TELEMETRY_DISABLED=1
+COPY . .
+RUN pnpm turbo build --filter=@agentic-csv/infrastructure...
+RUN chown node:node /app && chown -R node:node /app/apps/web /app/packages
+USER node
+EXPOSE 3000
+CMD ["pnpm", "turbo", "dev", "--env-mode=loose", "--filter=@agentic-csv/web..."]
+
 FROM deps AS builder
 COPY . .
 RUN pnpm turbo build --filter=@agentic-csv/web...

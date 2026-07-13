@@ -1,5 +1,7 @@
+import { sql } from "drizzle-orm";
 import {
   boolean,
+  check,
   index,
   integer,
   jsonb,
@@ -12,17 +14,33 @@ import {
   varchar
 } from "drizzle-orm/pg-core";
 
-export const users = pgTable("users", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  email: varchar("email", { length: 320 }).unique(),
-  pendingEmail: varchar("pending_email", { length: 320 }),
-  displayName: varchar("display_name", { length: 160 }).notNull(),
-  passwordHash: text("password_hash"),
-  emailVerifiedAt: timestamp("email_verified_at", { withTimezone: true }),
-  status: varchar("status", { length: 32 }).notNull().default("api_only"),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
-});
+export const users = pgTable(
+  "users",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    email: varchar("email", { length: 320 }).unique(),
+    pendingEmail: varchar("pending_email", { length: 320 }),
+    displayName: varchar("display_name", { length: 160 }).notNull(),
+    passwordHash: text("password_hash"),
+    emailVerifiedAt: timestamp("email_verified_at", { withTimezone: true }),
+    status: varchar("status", { length: 32 }).notNull().default("api_only"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
+  },
+  (table) => [
+    uniqueIndex("users_email_normalized_unique")
+      .on(sql`lower(${table.email})`)
+      .where(sql`${table.email} is not null`),
+    check(
+      "users_email_normalized_check",
+      sql`${table.email} is null or ${table.email} = lower(btrim(${table.email}))`
+    ),
+    check(
+      "users_pending_email_normalized_check",
+      sql`${table.pendingEmail} is null or ${table.pendingEmail} = lower(btrim(${table.pendingEmail}))`
+    )
+  ]
+);
 
 export const apiKeys = pgTable(
   "api_keys",
@@ -42,6 +60,79 @@ export const apiKeys = pgTable(
   (table) => [
     uniqueIndex("api_keys_key_hash_unique").on(table.keyHash),
     index("api_keys_user_active_idx").on(table.userId, table.revokedAt)
+  ]
+);
+
+export const sessions = pgTable(
+  "sessions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    tokenHash: varchar("token_hash", { length: 64 }).notNull(),
+    csrfHash: varchar("csrf_hash", { length: 64 }).notNull(),
+    userAgent: varchar("user_agent", { length: 255 }),
+    ipHash: varchar("ip_hash", { length: 64 }),
+    idleExpiresAt: timestamp("idle_expires_at", { withTimezone: true }).notNull(),
+    absoluteExpiresAt: timestamp("absolute_expires_at", { withTimezone: true }).notNull(),
+    lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).notNull().defaultNow(),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    rotatedFromId: uuid("rotated_from_id"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
+  },
+  (table) => [
+    uniqueIndex("sessions_token_hash_unique").on(table.tokenHash),
+    index("sessions_user_active_idx").on(table.userId, table.revokedAt),
+    index("sessions_expiry_idx").on(table.absoluteExpiresAt),
+    check(
+      "sessions_expiry_order_check",
+      sql`${table.idleExpiresAt} <= ${table.absoluteExpiresAt}`
+    )
+  ]
+);
+
+export const verificationTokens = pgTable(
+  "verification_tokens",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    tokenHash: varchar("token_hash", { length: 64 }).notNull(),
+    purpose: varchar("purpose", { length: 32 }).notNull(),
+    pendingEmail: varchar("pending_email", { length: 320 }),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    consumedAt: timestamp("consumed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
+  },
+  (table) => [
+    uniqueIndex("verification_tokens_hash_unique").on(table.tokenHash),
+    index("verification_tokens_user_purpose_idx").on(table.userId, table.purpose),
+    index("verification_tokens_expiry_idx").on(table.expiresAt),
+    check(
+      "verification_tokens_purpose_check",
+      sql`${table.purpose} in ('initial', 'email_change')`
+    )
+  ]
+);
+
+export const passwordResetTokens = pgTable(
+  "password_reset_tokens",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    tokenHash: varchar("token_hash", { length: 64 }).notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    consumedAt: timestamp("consumed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
+  },
+  (table) => [
+    uniqueIndex("password_reset_tokens_hash_unique").on(table.tokenHash),
+    index("password_reset_tokens_user_idx").on(table.userId),
+    index("password_reset_tokens_expiry_idx").on(table.expiresAt)
   ]
 );
 

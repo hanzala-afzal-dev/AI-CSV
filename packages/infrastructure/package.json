@@ -16,6 +16,10 @@
       "types": "./dist/src/auth/api-key.d.ts",
       "import": "./dist/src/auth/api-key.js"
     },
+    "./identity": {
+      "types": "./dist/src/auth/index.d.ts",
+      "import": "./dist/src/auth/index.js"
+    },
     "./database": {
       "types": "./dist/src/database/client.d.ts",
       "import": "./dist/src/database/client.js"
@@ -58,7 +62,8 @@
     }
   },
   "scripts": {
-    "build": "tsup src/index.ts src/auth/api-key.ts src/config/env.ts src/database/client.ts src/database/unit-of-work.ts src/health/readiness.ts src/logging/logger.ts src/queue/queues.ts src/queue/outbox-dispatcher.ts src/rate-limit/rate-limiter.ts src/redis/client.ts src/storage/s3-object-storage.ts src/vector/qdrant.ts drizzle/schema.ts --format esm --dts --clean",
+    "build": "tsup src/index.ts src/auth/api-key.ts src/auth/index.ts src/auth/identity-mailer.ts src/auth/identity-repository.ts src/auth/password-hasher.ts src/auth/secure-token.ts src/config/env.ts src/database/client.ts src/database/unit-of-work.ts src/health/readiness.ts src/logging/logger.ts src/queue/queues.ts src/queue/outbox-dispatcher.ts src/rate-limit/rate-limiter.ts src/redis/client.ts src/storage/s3-object-storage.ts src/vector/qdrant.ts drizzle/schema.ts --format esm --dts --clean",
+    "dev": "tsup src/index.ts src/auth/api-key.ts src/auth/index.ts src/auth/identity-mailer.ts src/auth/identity-repository.ts src/auth/password-hasher.ts src/auth/secure-token.ts src/config/env.ts src/database/client.ts src/database/unit-of-work.ts src/health/readiness.ts src/logging/logger.ts src/queue/queues.ts src/queue/outbox-dispatcher.ts src/rate-limit/rate-limiter.ts src/redis/client.ts src/storage/s3-object-storage.ts src/vector/qdrant.ts drizzle/schema.ts --format esm --dts --watch",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run tests/*.test.ts --passWithNoTests",
@@ -72,14 +77,17 @@
     "@aws-sdk/s3-request-presigner": "3.1080.0",
     "@duckdb/node-api": "1.5.4-r.1",
     "@qdrant/js-client-rest": "1.18.0",
+    "argon2": "0.44.0",
     "bullmq": "5.79.3",
     "drizzle-orm": "0.45.2",
+    "nodemailer": "9.0.3",
     "pg": "8.22.0",
     "pino": "10.3.1",
     "redis": "6.1.0",
     "zod": "4.4.3"
   },
   "devDependencies": {
+    "@types/nodemailer": "7.0.11",
     "@types/pg": "8.20.0",
     "tsup": "8.5.1",
     "typescript": "6.0.3",

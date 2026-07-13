@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "next dev --port 3000",
+    "dev": "next dev --hostname 0.0.0.0 --port 3000",
     "build": "next build",
     "start": "next start --port 3000",
     "lint": "eslint .",
@@ -17,9 +17,15 @@
     "@agentic-csv/contracts": "workspace:*",
     "@agentic-csv/domain": "workspace:*",
     "@agentic-csv/infrastructure": "workspace:*",
+    "@radix-ui/react-label": "2.1.8",
+    "@radix-ui/react-slot": "1.2.4",
+    "class-variance-authority": "0.7.1",
+    "clsx": "2.1.1",
+    "lucide-react": "0.468.0",
     "next": "16.2.10",
     "react": "19.2.7",
     "react-dom": "19.2.7",
+    "tailwind-merge": "3.3.0",
     "zod": "4.4.3"
   },
   "devDependencies": {

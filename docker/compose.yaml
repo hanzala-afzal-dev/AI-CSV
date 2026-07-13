@@ -1,0 +1,8 @@
+# Docker Compose discovers this file automatically when commands run from this
+# directory. The include loads root project values before interpolating the
+# ignored local stack file.
+name: agentic-csv-analyst
+
+include:
+  - path: ./stack.yml
+    env_file: ../.env

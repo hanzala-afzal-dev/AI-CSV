@@ -29,6 +29,27 @@
       "when": 1783715844374,
       "tag": "0003_tricky_violations",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1783875755520,
+      "tag": "0004_free_thena",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1783880000000,
+      "tag": "0005_identity_least_privilege",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1783934076448,
+      "tag": "0006_identity_email_uniqueness",
+      "breakpoints": true
     }
   ]
 }

@@ -12,20 +12,36 @@ if (!existsSync(envFile)) {
   process.exit(1);
 }
 
-const parsed = Object.fromEntries(
-  readFileSync(envFile, "utf8")
-    .split("\n")
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0 && !line.startsWith("#"))
-    .map((line) => {
-      const separator = line.indexOf("=");
-      if (separator === -1) {
-        return [line, ""];
-      }
+function readEnvFile(path: string): Record<string, string> {
+  return Object.fromEntries(
+    readFileSync(path, "utf8")
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0 && !line.startsWith("#"))
+      .map((line) => {
+        const separator = line.indexOf("=");
+        if (separator === -1) {
+          return [line, ""];
+        }
 
-      return [line.slice(0, separator), line.slice(separator + 1)];
-    })
-);
+        return [line.slice(0, separator), line.slice(separator + 1)];
+      })
+  );
+}
+
+const parsed = readEnvFile(envFile);
+
+if (envFile === resolve(process.cwd(), ".env")) {
+  const example = readEnvFile(resolve(process.cwd(), ".env.example"));
+  const missingKeys = Object.keys(example).filter((key) => !(key in parsed));
+
+  if (missingKeys.length > 0) {
+    console.error(
+      `Environment file is missing keys from .env.example: ${missingKeys.join(", ")}`
+    );
+    process.exit(1);
+  }
+}
 
 const result = parseEnv(parsed);
 

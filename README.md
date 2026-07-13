@@ -20,21 +20,13 @@ billing system; users bring their own provider credentials.
 
 ## What Comes Next
 
-The platform foundation and secure versioned upload orchestration are in place. The next milestone is the
-identity and tenant-boundary phase:
+The identity and tenant-boundary implementation is in place. Its remaining database, production-build,
+and browser smoke checks are tracked in the implementation ledger.
 
-- email/password registration and sign-in;
-- Argon2id password hashing;
-- persisted, revocable browser sessions;
-- secure HTTP-only cookies and session rotation;
-- CSRF protection and authentication rate limits;
-- email verification and password reset;
-- profile, password, email, and active-session management;
-- API and PostgreSQL tests proving that one user cannot access another user's data.
-
-After identity is complete, implementation continues with encrypted OpenAI settings, persistent
-conversations, CSV profiling, deterministic analytics and charts, agent orchestration, retrieval and
-memory, then final security and accessibility hardening.
+The next product milestone is secure OpenAI settings: encrypted per-user credentials, safe key metadata,
+credential validation, an account-specific model catalog, and model/reasoning preferences. After that,
+implementation continues with persistent conversations, CSV profiling, deterministic analytics and
+charts, agent orchestration, retrieval and memory, then final security and accessibility hardening.
 
 Detailed progress and the authoritative next implementation slice are tracked in
 [`docs/implementation.md`](./docs/implementation.md).

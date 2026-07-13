@@ -25,6 +25,10 @@ Session policy:
 - State-changing requests require both an allowed Origin/Referer and a CSRF token bound to the session.
 - Registration, login and recovery endpoints use enumeration-safe responses and the rate limits in spec 014.
 
+Argon2id policy for the initial release is centrally configured with a minimum of 19 MiB memory, two
+iterations and one degree of parallelism. Deployments may increase these values after measuring their
+hardware but may not reduce them below the configured minimum.
+
 Email delivery is an application port. Local development uses a mail catcher or a safe log transport that
 never logs usable production tokens; production deployments must configure an SMTP/provider adapter.
 
@@ -43,6 +47,14 @@ never logs usable production tokens; production deployments must configure an SM
 - Requires current password unless initiated through a reset token.
 - Successful change revokes other sessions by default.
 - The current session may remain after session rotation.
+
+Session revocation policy:
+
+- login replaces and revokes any session presented by that browser;
+- password change and password reset revoke every existing session before a replacement is issued;
+- requesting an email change rotates the current session but preserves other sessions;
+- confirming an email change preserves active sessions because the request already required password
+  re-authentication and current-session rotation.
 
 ## 4. Authorization policy
 

@@ -8,7 +8,52 @@ Use a clean, familiar conversational layout inspired by modern AI assistants wit
 
 Preserve the existing React frontend setup. Add features incrementally using TypeScript, accessible components and a consistent design system.
 
-## 2. Desktop layout
+## 2. Component architecture
+
+Build the frontend component-first. Pages and layouts compose reusable components; they must not contain
+large feature implementations or duplicate interaction patterns.
+
+```text
+apps/web/src/
+  app/                  # routes, layouts, loading/error boundaries, page composition
+  components/
+    ui/                 # shared shadcn/ui primitives owned by this repository
+    auth/               # reusable identity and session components
+    conversations/      # conversation and message components
+    datasets/           # upload, profile, and dataset components
+    settings/           # account and provider-setting components
+  features/             # feature hooks, client state, form orchestration, view models
+  lib/                  # browser-safe API client and shared frontend utilities
+```
+
+Rules:
+
+- Prefer composition and small focused components over configurable all-purpose components.
+- Use shared primitives for buttons, inputs, forms, dialogs, menus, tabs, tables, alerts, skeletons,
+  tooltips, and toasts.
+- Keep feature-specific behavior in its feature component; promote it to `components/ui` only when it is
+  genuinely generic and reused.
+- Keep domain and authorization rules out of React. Components consume typed application-facing HTTP
+  contracts.
+- Use Server Components by default. Add `"use client"` only at the smallest interactive boundary.
+- Every reusable interactive component exposes accessible labels, keyboard behavior, focus handling,
+  disabled/loading states, and a stable typed API.
+- Do not create wrapper components that merely rename every shadcn/ui prop. Wrap a primitive only to
+  establish a real application convention or repeated behavior.
+
+### shadcn/ui
+
+Use shadcn/ui as the preferred source for accessible primitives where it fits the interaction. Generated
+components live in `apps/web/src/components/ui` and become repository-owned source code. Install only
+components required by an implemented feature; do not bulk-install the catalog. Preserve the project's
+Tailwind design tokens and use Lucide icons supplied through the shadcn ecosystem where an appropriate
+icon exists.
+
+If shadcn/ui does not fit a specialized visualization or data interaction, build a focused accessible
+component using the same tokens and composition conventions, and document a materially different design
+system choice in an ADR.
+
+## 3. Desktop layout
 
 ```text
 ┌──────────────────┬─────────────────────────────────────────────┐
@@ -23,7 +68,7 @@ Preserve the existing React frontend setup. Add features incrementally using Typ
 └──────────────────┴─────────────────────────────────────────────┘
 ```
 
-## 3. Navigation
+## 4. Navigation
 
 Left sidebar:
 
@@ -35,7 +80,7 @@ Left sidebar:
 - settings/profile menu
 - collapsible desktop state and mobile drawer
 
-## 4. Chat empty state
+## 5. Chat empty state
 
 Before a dataset is ready:
 
@@ -58,7 +103,7 @@ After readiness:
 - 3–6 suggested prompt chips
 - active dataset/version badge
 
-## 5. Composer
+## 6. Composer
 
 - multiline textarea with auto-grow and keyboard shortcuts
 - send button
@@ -67,7 +112,7 @@ After readiness:
 - stop/cancel action while running
 - accessible labels and focus states
 
-## 6. Message rendering
+## 7. Message rendering
 
 Assistant messages may render:
 
@@ -81,7 +126,7 @@ Assistant messages may render:
 
 Never render model-provided raw HTML or code as executable UI.
 
-## 7. Settings UI
+## 8. Settings UI
 
 ### Profile
 
@@ -102,7 +147,7 @@ Current password, new password, confirmation and active-session list.
 - reasoning effort select
 - explicit provider usage/cost notice: the open-source app does not bill users; provider charges may apply to their own account
 
-## 8. States
+## 9. States
 
 Every async view requires:
 
@@ -113,7 +158,7 @@ Every async view requires:
 - permanent validation error
 - unauthorized/session expired handling
 
-## 9. Accessibility
+## 10. Accessibility
 
 - WCAG AA-oriented contrast.
 - Full keyboard navigation.
@@ -123,14 +168,14 @@ Every async view requires:
 - Dialog focus trap and restoration.
 - Do not communicate status by color alone.
 
-## 10. Responsive behavior
+## 11. Responsive behavior
 
 - Sidebar becomes drawer on narrow screens.
 - Charts resize without horizontal clipping; tables may scroll.
 - Composer remains reachable above mobile browser UI.
 - Settings use stacked sections.
 
-## 11. Acceptance scenarios
+## 12. Acceptance scenarios
 
 ```gherkin
 Scenario: new user has no key

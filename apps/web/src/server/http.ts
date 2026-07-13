@@ -1,7 +1,11 @@
-import { createHash } from "node:crypto";
+import { createHash, createHmac } from "node:crypto";
 import { NextResponse } from "next/server";
 import { ZodError } from "zod";
-import { DatasetWorkflowError } from "@agentic-csv/application";
+import {
+  DatasetWorkflowError,
+  IdentityError,
+  type AuthenticatedSession
+} from "@agentic-csv/application";
 import { DomainError } from "@agentic-csv/domain";
 import { authenticateApiKey, type ApiPrincipal } from "@agentic-csv/infrastructure/auth";
 import { ensureRedisConnected, getRuntime } from "./runtime";
@@ -20,8 +24,135 @@ export class HttpError extends Error {
 
 export interface RequestContext {
   readonly correlationId: string;
-  readonly principal: ApiPrincipal;
+  readonly principal:
+    ApiPrincipal | { readonly userId: string; readonly sessionId: string };
   readonly responseHeaders: Readonly<Record<string, string>>;
+}
+
+export interface BrowserRequestContext {
+  readonly correlationId: string;
+  readonly session: AuthenticatedSession;
+  readonly sessionToken: string;
+  readonly responseHeaders: Readonly<Record<string, string>>;
+}
+
+export const genericAcceptedMessage =
+  "If the account can receive this request, an email will arrive shortly.";
+
+export const genericRegistrationAcceptedMessage =
+  "If this email is eligible for a new account, a verification email will arrive shortly.";
+
+export function getSessionCookie(request: Request): string | null {
+  const cookieName = getRuntime().env.SESSION_COOKIE_NAME;
+  const cookieHeader = request.headers.get("cookie");
+  if (!cookieHeader) return null;
+  for (const part of cookieHeader.split(";")) {
+    const [name, ...value] = part.trim().split("=");
+    if (name === cookieName) return decodeURIComponent(value.join("="));
+  }
+  return null;
+}
+
+export function setSessionCookie(response: NextResponse, sessionToken: string): void {
+  const env = getRuntime().env;
+  response.cookies.set(env.SESSION_COOKIE_NAME, sessionToken, {
+    httpOnly: true,
+    secure: env.NODE_ENV === "production",
+    sameSite: "strict",
+    path: "/",
+    maxAge: env.SESSION_ABSOLUTE_TTL_SECONDS
+  });
+}
+
+export function clearSessionCookie(response: NextResponse): void {
+  const env = getRuntime().env;
+  response.cookies.set(env.SESSION_COOKIE_NAME, "", {
+    httpOnly: true,
+    secure: env.NODE_ENV === "production",
+    sameSite: "strict",
+    path: "/",
+    maxAge: 0
+  });
+}
+
+export async function authenticateBrowserRequest(
+  request: Request
+): Promise<BrowserRequestContext> {
+  const sessionToken = getSessionCookie(request);
+  const session = sessionToken
+    ? await getRuntime().identityService.authenticateSession(sessionToken)
+    : null;
+  if (!session || !sessionToken) {
+    throw new HttpError(401, "AUTHENTICATION_REQUIRED", "Sign in is required.");
+  }
+  return {
+    correlationId: readCorrelationId(request),
+    session,
+    sessionToken,
+    responseHeaders: {}
+  };
+}
+
+export async function authorizeBrowserMutation(
+  request: Request
+): Promise<BrowserRequestContext> {
+  validateBrowserMutationRequest(request, new URL(getRuntime().env.APP_URL).origin);
+  const context = await authenticateBrowserRequest(request);
+  const csrfToken = request.headers.get("x-csrf-token");
+  if (
+    !csrfToken ||
+    !getRuntime().identityService.verifyCsrf(context.session, csrfToken)
+  ) {
+    throw new HttpError(
+      403,
+      "CSRF_TOKEN_INVALID",
+      "The security token is invalid or expired."
+    );
+  }
+  const responseHeaders = await enforceRateLimit(
+    `browser:user:${context.session.userId}`,
+    getRuntime().env.RATE_LIMIT_MAX_REQUESTS
+  );
+  return { ...context, responseHeaders };
+}
+
+export async function protectPublicAuthRequest(
+  request: Request,
+  category: "login" | "register" | "recovery",
+  identifier: string
+): Promise<void> {
+  validateBrowserMutationRequest(request, new URL(getRuntime().env.APP_URL).origin);
+  const env = getRuntime().env;
+  const limit =
+    category === "recovery"
+      ? env.RATE_LIMIT_RECOVERY_MAX_REQUESTS
+      : env.RATE_LIMIT_LOGIN_MAX_REQUESTS;
+  const ipBucket = hashPrivateValue(readClientAddress(request), env.AUTH_SECRET);
+  const identifierBucket = hashPrivateValue(
+    identifier.trim().normalize("NFKC").toLowerCase(),
+    env.AUTH_SECRET
+  );
+  await enforceRateLimit(`auth:${category}:ip:${ipBucket}`, limit);
+  await enforceRateLimit(`auth:${category}:identifier:${identifierBucket}`, limit);
+}
+
+export async function protectAuthenticatedLogin(userId: string): Promise<void> {
+  await enforceRateLimit(
+    `auth:login:account:${userId}`,
+    getRuntime().env.RATE_LIMIT_LOGIN_MAX_REQUESTS
+  );
+}
+
+export function sessionMetadata(request: Request): {
+  readonly userAgent: string | null;
+  readonly ipHash: string | null;
+} {
+  const env = getRuntime().env;
+  const address = readClientAddress(request);
+  return {
+    userAgent: request.headers.get("user-agent")?.slice(0, 255) ?? null,
+    ipHash: address === "unknown" ? null : hashPrivateValue(address, env.AUTH_SECRET)
+  };
 }
 
 export async function authorizeMutation(
@@ -31,6 +162,15 @@ export async function authorizeMutation(
   const runtime = getRuntime();
   validateMutationRequest(request, new URL(runtime.env.APP_URL).origin);
   const correlationId = readCorrelationId(request);
+  const browserToken = getSessionCookie(request);
+  if (browserToken) {
+    const browser = await authorizeBrowserMutation(request);
+    return {
+      correlationId: browser.correlationId,
+      principal: { userId: browser.session.userId, sessionId: browser.session.id },
+      responseHeaders: browser.responseHeaders
+    };
+  }
   try {
     await ensureRedisConnected();
   } catch {
@@ -122,8 +262,17 @@ export function requireIdempotencyKey(request: Request): string {
 
 export async function readJson(request: Request): Promise<unknown> {
   try {
-    return await request.json();
-  } catch {
+    const declaredLength = Number(request.headers.get("content-length") ?? 0);
+    if (Number.isFinite(declaredLength) && declaredLength > 65_536) {
+      throw new HttpError(413, "REQUEST_BODY_TOO_LARGE", "Request body is too large.");
+    }
+    const text = await request.text();
+    if (new TextEncoder().encode(text).byteLength > 65_536) {
+      throw new HttpError(413, "REQUEST_BODY_TOO_LARGE", "Request body is too large.");
+    }
+    return JSON.parse(text) as unknown;
+  } catch (error) {
+    if (error instanceof HttpError) throw error;
     throw new HttpError(400, "INVALID_JSON", "Request body must be valid JSON.");
   }
 }
@@ -149,7 +298,7 @@ export function errorResponse(
     {
       correlationId,
       code: mapped.code,
-      error: mapped.status >= 500 ? error : undefined
+      error: mapped.status >= 500 ? serializeError(error) : undefined
     },
     "API request failed"
   );
@@ -164,6 +313,18 @@ export function errorResponse(
     },
     { status: mapped.status, headers: mapped.headers }
   );
+}
+
+function serializeError(error: unknown): Record<string, unknown> {
+  if (!(error instanceof Error)) {
+    return { name: "UnknownError" };
+  }
+  return {
+    name: error.name,
+    message: error.message.slice(0, 500),
+    stack: error.stack?.split("\n").slice(0, 12).join("\n"),
+    code: "code" in error && typeof error.code === "string" ? error.code : undefined
+  };
 }
 
 export function hashRequestBody(value: unknown): string {
@@ -204,6 +365,16 @@ export function validateMutationRequest(request: Request, trustedOrigin: string)
   }
 }
 
+export function validateBrowserMutationRequest(
+  request: Request,
+  trustedOrigin: string
+): void {
+  validateMutationRequest(request, trustedOrigin);
+  if (!request.headers.get("origin") && !request.headers.get("referer")) {
+    throw new HttpError(403, "ORIGIN_REQUIRED", "A trusted request origin is required.");
+  }
+}
+
 function readCorrelationId(request: Request): string {
   const value = request.headers.get("x-correlation-id");
   return value && /^[0-9a-f-]{36}$/i.test(value) ? value : crypto.randomUUID();
@@ -220,6 +391,49 @@ function rateLimitError(
   });
 }
 
+async function enforceRateLimit(
+  key: string,
+  limit: number
+): Promise<Readonly<Record<string, string>>> {
+  try {
+    await ensureRedisConnected();
+  } catch {
+    throw new HttpError(
+      503,
+      "RATE_LIMIT_UNAVAILABLE",
+      "Request protection is temporarily unavailable."
+    );
+  }
+  const env = getRuntime().env;
+  const decision = await getRuntime().rateLimiter.check({
+    key,
+    limit,
+    windowSeconds: env.RATE_LIMIT_WINDOW_SECONDS,
+    now: new Date()
+  });
+  const headers = {
+    "x-ratelimit-limit": String(decision.limit),
+    "x-ratelimit-remaining": String(decision.remaining),
+    "x-ratelimit-reset": String(Math.ceil(decision.resetAt.getTime() / 1000))
+  };
+  if (!decision.allowed) throw rateLimitError(decision.resetAt, headers);
+  return headers;
+}
+
+function readClientAddress(request: Request): string {
+  const env = getRuntime().env;
+  if (!env.TRUST_PROXY) return "unknown";
+  return (
+    request.headers.get("x-forwarded-for")?.split(",", 1)[0]?.trim() ||
+    request.headers.get("x-real-ip")?.trim() ||
+    "unknown"
+  );
+}
+
+function hashPrivateValue(value: string, secret: string): string {
+  return createHmac("sha256", secret).update(value).digest("hex").slice(0, 32);
+}
+
 function mapError(error: unknown): {
   readonly status: number;
   readonly code: string;
@@ -228,6 +442,22 @@ function mapError(error: unknown): {
 } {
   if (error instanceof HttpError) {
     return error;
+  }
+  if (error instanceof IdentityError) {
+    const statusByCode: Record<string, number> = {
+      AUTHENTICATION_FAILED: 401,
+      AUTHENTICATION_REQUIRED: 401,
+      CURRENT_PASSWORD_INVALID: 403,
+      EMAIL_UNAVAILABLE: 409,
+      SESSION_NOT_FOUND: 404,
+      TOKEN_INVALID_OR_EXPIRED: 400
+    };
+    return {
+      status: statusByCode[error.code] ?? 400,
+      code: error.code,
+      message: error.message,
+      headers: {}
+    };
   }
   if (error instanceof ZodError) {
     return {

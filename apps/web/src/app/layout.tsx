@@ -4,7 +4,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Agentic CSV Analyst",
-  description: "Production-minded foundation for deterministic CSV analysis with agents."
+  description: "Ask reliable questions of CSV data through deterministic analysis."
 };
 
 export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {

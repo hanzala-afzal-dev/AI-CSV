@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { HttpError, validateMutationRequest } from "../src/server/http";
+import {
+  HttpError,
+  validateBrowserMutationRequest,
+  validateMutationRequest
+} from "../src/server/http";
 
 const trustedOrigin = "https://csv.example.com";
 
@@ -52,6 +56,16 @@ describe("mutation request security", () => {
 
     expect(() => validateMutationRequest(request, trustedOrigin)).toThrowError(
       "Request referer is not trusted"
+    );
+  });
+
+  it("requires Origin or Referer for browser mutations", () => {
+    const request = new Request(`${trustedOrigin}/api/v1/auth/login`, {
+      method: "POST",
+      headers: { "content-type": "application/json" }
+    });
+    expect(() => validateBrowserMutationRequest(request, trustedOrigin)).toThrowError(
+      "A trusted request origin is required"
     );
   });
 });
