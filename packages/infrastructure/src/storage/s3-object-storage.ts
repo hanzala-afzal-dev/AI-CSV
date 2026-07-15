@@ -1,5 +1,6 @@
 import {
   CreateBucketCommand,
+  GetObjectCommand,
   HeadBucketCommand,
   HeadObjectCommand,
   PutObjectCommand,
@@ -77,12 +78,7 @@ export class S3ObjectStorage implements ObjectStorage {
       ContentType: request.contentType,
       ContentLength: request.sizeBytes,
       ChecksumSHA256: request.checksumSha256,
-      Metadata: {
-        "user-id": request.userId,
-        "dataset-id": request.datasetId,
-        "dataset-version-id": request.datasetVersionId,
-        "upload-intent-id": request.uploadIntentId
-      }
+      Metadata: { "upload-intent-id": request.uploadIntentId }
     });
     const uploadUrl = await getSignedUrl(this.presignClient, command, {
       expiresIn: request.expiresInSeconds
@@ -94,9 +90,6 @@ export class S3ObjectStorage implements ObjectStorage {
       requiredHeaders: {
         "content-type": request.contentType,
         "x-amz-checksum-sha256": request.checksumSha256,
-        "x-amz-meta-user-id": request.userId,
-        "x-amz-meta-dataset-id": request.datasetId,
-        "x-amz-meta-dataset-version-id": request.datasetVersionId,
         "x-amz-meta-upload-intent-id": request.uploadIntentId
       },
       expiresAt: new Date(Date.now() + request.expiresInSeconds * 1000)
@@ -121,11 +114,22 @@ export class S3ObjectStorage implements ObjectStorage {
       datasetVersionId: response.Metadata?.["dataset-version-id"] ?? null
     };
   }
+
+  public async readObject(objectKey: string): Promise<AsyncIterable<Uint8Array>> {
+    const response = await this.client.send(
+      new GetObjectCommand({ Bucket: this.bucket, Key: objectKey })
+    );
+    const body = response.Body;
+    if (!body || !(Symbol.asyncIterator in body)) {
+      throw new Error("Stored object did not provide a readable body.");
+    }
+    return body as AsyncIterable<Uint8Array>;
+  }
 }
 
 function requireUuidPathSegment(value: string, field: string): string {
   if (
-    !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
       value
     )
   ) {

@@ -1,5 +1,6 @@
 import {
   ConversationService,
+  DatasetService,
   IdentityService,
   ProviderSettingsService
 } from "@agentic-csv/application";
@@ -22,6 +23,7 @@ import {
   AesGcmCredentialCipher,
   OpenAiProviderGateway,
   PostgresConversationRepository,
+  PostgresDatasetRepository,
   PostgresProviderSettingsRepository
 } from "@agentic-csv/infrastructure";
 import { RedisLeaseLimiter } from "@agentic-csv/infrastructure";
@@ -40,6 +42,7 @@ export interface WebRuntime {
   readonly identityService: IdentityService;
   readonly providerSettingsService: ProviderSettingsService;
   readonly conversationService: ConversationService;
+  readonly datasetService: DatasetService;
 }
 
 function createRuntime(): WebRuntime {
@@ -58,6 +61,7 @@ function createRuntime(): WebRuntime {
   });
   const providerRepository = new PostgresProviderSettingsRepository(database);
   const conversationRepository = new PostgresConversationRepository(database);
+  const datasetRepository = new PostgresDatasetRepository(database);
   return {
     env,
     database,
@@ -97,7 +101,8 @@ function createRuntime(): WebRuntime {
         defaultReasoningEffort: env.DEFAULT_REASONING_EFFORT
       }
     ),
-    conversationService: new ConversationService(conversationRepository)
+    conversationService: new ConversationService(conversationRepository),
+    datasetService: new DatasetService(datasetRepository)
   };
 }
 

@@ -4,6 +4,7 @@ import {
   authorizeMutation,
   errorResponse,
   hashRequestBody,
+  protectDatasetUpload,
   readJson,
   requireIdempotencyKey,
   successResponse,
@@ -18,6 +19,11 @@ export async function POST(
   let context: RequestContext | undefined;
   try {
     context = await authorizeMutation(request);
+    const uploadHeaders = await protectDatasetUpload(
+      request,
+      context.principal.userId,
+      "completion"
+    );
     const runtime = getRuntime();
     const handler = new CompleteDatasetUploadHandler(
       runtime.unitOfWork,
@@ -34,7 +40,10 @@ export async function POST(
       requestHash: hashRequestBody({ datasetId, uploadIntentId: body.uploadIntentId }),
       correlationId: context.correlationId
     });
-    return successResponse(result, context);
+    return successResponse(result, {
+      ...context,
+      responseHeaders: { ...context.responseHeaders, ...uploadHeaders }
+    });
   } catch (error) {
     return errorResponse(error, context?.correlationId);
   }

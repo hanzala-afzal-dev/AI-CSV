@@ -10,7 +10,12 @@ import type {
   UnitOfWork,
   UploadIntentRepository
 } from "@agentic-csv/application";
-import { Dataset, DatasetId, type DomainEvent } from "@agentic-csv/domain";
+import {
+  Dataset,
+  DatasetId,
+  DatasetVersion,
+  type DomainEvent
+} from "@agentic-csv/domain";
 import {
   datasetUploadIntents,
   datasetVersions,
@@ -157,14 +162,68 @@ class DrizzleDatasetVersionRepository {
     readonly sizeBytes: number;
     readonly checksum: string;
   }): Promise<void> {
-    await this.database.insert(datasetVersions).values(input);
+    const version = DatasetVersion.create({
+      id: input.id,
+      userId: input.userId,
+      datasetId: input.datasetId,
+      versionNumber: input.versionNumber
+    }).toPrimitives();
+    await this.database.insert(datasetVersions).values({
+      ...input,
+      status: version.status,
+      createdAt: version.createdAt,
+      updatedAt: version.updatedAt
+    });
+    await this.database
+      .update(datasets)
+      .set({ activeVersionId: input.id, updatedAt: new Date() })
+      .where(and(eq(datasets.id, input.datasetId), eq(datasets.userId, input.userId)));
   }
 
-  public async markUploaded(id: string, userId: string, uploadedAt: Date): Promise<void> {
-    await this.database
+  public async markQueued(id: string, userId: string, queuedAt: Date): Promise<void> {
+    const [stored] = await this.database
+      .select()
+      .from(datasetVersions)
+      .where(and(eq(datasetVersions.id, id), eq(datasetVersions.userId, userId)))
+      .limit(1)
+      .for("update");
+    if (!stored) {
+      throw new Error("Dataset version was not found.");
+    }
+    const version = DatasetVersion.rehydrate({
+      id: stored.id,
+      userId: stored.userId,
+      datasetId: stored.datasetId,
+      versionNumber: stored.versionNumber,
+      status: stored.status,
+      failureCode: stored.failureCode,
+      createdAt: stored.createdAt,
+      updatedAt: stored.updatedAt
+    });
+    version.markUploaded(queuedAt);
+    version.markQueued(queuedAt);
+    const [updated] = await this.database
       .update(datasetVersions)
-      .set({ status: "uploaded", updatedAt: uploadedAt })
-      .where(and(eq(datasetVersions.id, id), eq(datasetVersions.userId, userId)));
+      .set({
+        status: version.status,
+        failureCode: version.toPrimitives().failureCode,
+        updatedAt: version.toPrimitives().updatedAt
+      })
+      .where(
+        and(
+          eq(datasetVersions.id, id),
+          eq(datasetVersions.userId, userId),
+          eq(datasetVersions.status, stored.status)
+        )
+      )
+      .returning({ datasetId: datasetVersions.datasetId });
+    if (!updated) {
+      throw new Error("Dataset version cannot transition to queued.");
+    }
+    await this.database
+      .update(datasets)
+      .set({ activeVersionId: id, updatedAt: queuedAt })
+      .where(and(eq(datasets.id, updated.datasetId), eq(datasets.userId, userId)));
   }
 }
 

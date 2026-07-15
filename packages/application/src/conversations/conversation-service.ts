@@ -90,6 +90,27 @@ export class ConversationService {
     return saved;
   }
 
+  public async setActiveDataset(input: {
+    readonly userId: string;
+    readonly conversationId: string;
+    readonly datasetVersionId: string | null;
+  }) {
+    const result = await this.repository.attachDatasetVersion({
+      ...input,
+      occurredAt: this.now()
+    });
+    if (result.state !== "attached") {
+      if (result.state === "conversation_not_found") throw notFound();
+      if (result.state === "dataset_version_not_found") {
+        throw new ConversationError(
+          "CONVERSATION_DATASET_NOT_FOUND",
+          "Dataset version was not found."
+        );
+      }
+    }
+    return result.conversation;
+  }
+
   public async delete(userId: string, conversationId: string): Promise<void> {
     if (!(await this.repository.delete(userId, conversationId))) throw notFound();
   }

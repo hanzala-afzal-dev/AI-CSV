@@ -29,7 +29,7 @@ export interface PendingDatasetVersion {
 export interface DatasetVersionRepository {
   nextVersionNumber(datasetId: string): Promise<number>;
   createPending(version: PendingDatasetVersion): Promise<void>;
-  markUploaded(id: string, userId: string, uploadedAt: Date): Promise<void>;
+  markQueued(id: string, userId: string, queuedAt: Date): Promise<void>;
 }
 
 export interface UploadIntentRepository {

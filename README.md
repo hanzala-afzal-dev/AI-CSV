@@ -20,13 +20,14 @@ billing system; users bring their own provider credentials.
 
 ## What Comes Next
 
-Identity, tenant isolation, secure per-user OpenAI settings, and the persistent conversation workspace
-are in place. Conversations, messages, run state, and reconnectable server-sent events are durable in
-PostgreSQL; a deterministic placeholder assistant proves the complete workflow before model orchestration.
+Identity, tenant isolation, secure per-user OpenAI settings, the persistent conversation workspace, and
+CSV ingestion are in place. Users can upload directly to isolated object storage, leave while a BullMQ
+worker validates and profiles the file with bounded DuckDB resources, then return to a durable dataset
+summary and schema-based prompt suggestions.
 
-The next product milestone is CSV upload and profiling: direct object-storage upload, defensive CSV
-validation, DuckDB profiling, persisted dataset status, and schema-based prompt suggestions. Later phases
-add deterministic analytics and charts, real agent orchestration with the user's OpenAI key, retrieval and
+The next product milestone is deterministic analytics and charts: typed analysis plans, an allow-listed
+plan-to-query compiler, bounded read-only DuckDB execution, persisted results and provenance, and trusted
+React chart renderers. Later phases add real agent orchestration with the user's OpenAI key, retrieval and
 memory, then final security and accessibility hardening.
 
 Detailed progress and the authoritative next implementation slice are tracked in

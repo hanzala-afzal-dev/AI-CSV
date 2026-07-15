@@ -40,6 +40,23 @@ export type {
   CreateDatasetCommand,
   CreateDatasetResult
 } from "./datasets/commands/create-dataset-command";
+export { DatasetService } from "./datasets/dataset-service";
+export { DatasetIngestionService } from "./datasets/dataset-ingestion-service";
+export { DatasetFileValidationError } from "./datasets/ports";
+export type {
+  ConversationDatasetContext,
+  CsvProfileInput,
+  CsvProfiler,
+  DatasetDetailView,
+  DatasetIngestionClaim,
+  DatasetIngestionRepository,
+  DatasetIngestionWork,
+  DatasetProfileView,
+  DatasetReadRepository,
+  DatasetVersionView,
+  DatasetView,
+  IngestionMutationInput
+} from "./datasets/ports";
 export { IdentityError } from "./identity/identity-error";
 export { IdentityService } from "./identity/identity-service";
 export type {
@@ -74,6 +91,7 @@ export { ConversationService } from "./conversations/conversation-service";
 export type {
   AgentRunView,
   ConversationCursor,
+  ConversationDatasetAttachmentResult,
   ConversationDetailView,
   ConversationMessageView,
   ConversationPage,

@@ -70,6 +70,43 @@ change itself added a worker workspace dependency, so an existing checkout needs
 `pnpm docker:up:build` for this upgrade only; subsequent source edits and daily starts use the normal
 non-rebuild workflow below.
 
+## Phase 5 environment upgrade
+
+Merge the CSV worker limits and upload-specific rate limits from `.env.example` into the root `.env`:
+
+```dotenv
+CSV_MAX_ROWS=1000000
+CSV_MAX_COLUMNS=500
+CSV_MAX_FIELD_CHARACTERS=1000000
+CSV_MAX_MALFORMED_ROW_RATIO=0
+CSV_PROFILE_TIMEOUT_MS=60000
+DUCKDB_MEMORY_LIMIT_MB=512
+INGESTION_CLAIM_TTL_SECONDS=300
+RATE_LIMIT_UPLOAD_INTENT_MAX_REQUESTS=10
+RATE_LIMIT_UPLOAD_COMPLETION_MAX_REQUESTS=20
+```
+
+If `docker/stack.yml` predates Phase 5, merge the `APP_URL` environment entry for `localstack` from the
+tracked `docker/docker-compose.yml.example`. This configures direct browser-upload CORS for the trusted
+application origin.
+
+Phase 5 adds a dedicated native DuckDB export used only by the worker. Existing checkouts need one
+targeted worker image build, then a normal Compose reconciliation to apply migration `0009` and the new
+environment values:
+
+```bash
+pnpm env:check
+pnpm docker:config
+docker compose --env-file .env -f docker/compose.yaml --profile app build worker
+pnpm docker:up
+pnpm docker:ps
+```
+
+This does not rebuild the web image. Once the worker image contains the Phase 5 dependency metadata,
+edits under the mounted source directories are rebuilt by the existing watchers and daily stop/start does
+not build or recreate containers. Manual browser verification is documented in
+[`docs/phase-5-e2e.md`](../docs/phase-5-e2e.md).
+
 Run normal lifecycle commands from the repository root:
 
 ```bash

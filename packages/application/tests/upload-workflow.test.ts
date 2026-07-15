@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   CompleteDatasetUploadHandler,
   DatasetWorkflowError,
@@ -49,6 +49,12 @@ class FakeObjectStorage implements ObjectStorage {
 
   public async inspectObject(): Promise<StoredObjectMetadata> {
     return this.metadata;
+  }
+
+  public async readObject(): Promise<AsyncIterable<Uint8Array>> {
+    return (async function* () {
+      yield new Uint8Array();
+    })();
   }
 }
 
@@ -109,8 +115,8 @@ function createFixture(
       async createPending(version) {
         versions.push(version);
       },
-      async markUploaded(id, versionUserId) {
-        versions.push({ id, userId: versionUserId, status: "uploaded" });
+      async markQueued(id, versionUserId) {
+        versions.push({ id, userId: versionUserId, status: "queued" });
       }
     },
     events: {
@@ -159,6 +165,66 @@ function createFixture(
 }
 
 describe("dataset upload workflow", () => {
+  it("does not issue a signed URL when the dataset is not owned by the actor", async () => {
+    const storage = new FakeObjectStorage();
+    const createPresignedUpload = vi.spyOn(storage, "createPresignedUpload");
+    const unitOfWork: UnitOfWork = {
+      async executeForUser(actorUserId, work) {
+        expect(actorUserId).toBe("22222222-2222-4222-8222-222222222222");
+        return work({
+          datasets: {
+            async findByIdForUser() {
+              return null;
+            },
+            async save() {}
+          },
+          datasetVersions: {
+            async nextVersionNumber() {
+              return 1;
+            },
+            async createPending() {},
+            async markQueued() {}
+          },
+          events: { async publish() {} },
+          uploadIntents: {
+            async create() {},
+            async findByIdForUser() {
+              return null;
+            },
+            async markCompleted() {}
+          },
+          idempotency: {
+            async find() {
+              return null;
+            },
+            async reserve() {
+              return {
+                acquired: true,
+                requestHash: "request-hash",
+                response: null,
+                completed: false
+              };
+            },
+            async complete() {}
+          },
+          ingestionRequests: { async publish() {} }
+        });
+      }
+    };
+    const handler = new InitiateDatasetUploadHandler(unitOfWork, storage, 1_000, 900);
+
+    await expect(
+      handler.execute({
+        userId: "22222222-2222-4222-8222-222222222222",
+        datasetId,
+        contentType: "text/csv",
+        sizeBytes: 128,
+        checksumSha256
+      })
+    ).rejects.toMatchObject({ code: "DATASET_NOT_FOUND" });
+    expect(createPresignedUpload).not.toHaveBeenCalled();
+  });
+
   it("rejects oversized uploads before creating an object-storage intent", async () => {
     const fixture = createFixture();
     const handler = new InitiateDatasetUploadHandler(

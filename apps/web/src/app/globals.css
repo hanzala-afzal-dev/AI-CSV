@@ -286,7 +286,7 @@ textarea {
   }
 
   .conversation-empty {
-    @apply mx-auto grid min-h-full w-full max-w-3xl place-items-center content-center gap-4 px-6 py-12 text-center;
+    @apply mx-auto grid min-h-full w-full max-w-3xl place-items-center content-center gap-4 px-4 py-8 sm:px-6;
   }
 
   .conversation-empty-icon {
@@ -387,5 +387,124 @@ textarea {
 
   .composer-actions {
     @apply flex min-h-10 items-center px-1 pb-1;
+  }
+
+  .csv-dataset-panel {
+    @apply grid w-full gap-4 rounded-md border border-dashed border-line bg-canvas/60 p-4 text-left sm:p-5;
+  }
+
+  .csv-dataset-panel-compact {
+    @apply border-solid bg-panel p-4;
+  }
+
+  .csv-dataset-header {
+    @apply flex min-w-0 items-start gap-3;
+  }
+
+  .csv-dataset-header h2 {
+    @apply truncate text-sm font-bold text-ink sm:text-base;
+  }
+
+  .csv-dataset-header p {
+    @apply mt-1 break-words text-xs leading-5 text-muted;
+  }
+
+  .csv-dataset-icon {
+    @apply grid size-10 shrink-0 place-items-center rounded-md border border-line bg-panel text-action;
+  }
+
+  .csv-dataset-icon-ready {
+    @apply border-success/20 bg-success-soft text-success;
+  }
+
+  .csv-dataset-icon-failed {
+    @apply border-danger/20 bg-danger-soft text-danger;
+  }
+
+  .csv-drop-target {
+    @apply flex min-h-24 w-full items-center justify-center gap-2 rounded-md border border-dashed border-line bg-panel px-4 text-sm font-semibold text-muted outline-none hover:border-focus hover:text-ink focus-visible:ring-2 focus-visible:ring-focus disabled:cursor-not-allowed disabled:opacity-60;
+  }
+
+  .dataset-progress-region {
+    @apply grid gap-2 border-t border-line pt-4;
+  }
+
+  .dataset-progress-region > div {
+    @apply flex items-center justify-between gap-4 text-xs;
+  }
+
+  .dataset-progress-region strong {
+    @apply font-bold text-ink;
+  }
+
+  .dataset-progress-region span,
+  .dataset-progress-region p {
+    @apply text-xs text-muted;
+  }
+
+  .dataset-progress-region progress {
+    @apply h-2 w-full overflow-hidden rounded bg-subtle;
+    accent-color: var(--color-action);
+  }
+
+  .dataset-profile-summary {
+    @apply grid gap-4 border-t border-line pt-4;
+  }
+
+  .dataset-profile-metrics {
+    @apply grid grid-cols-3 divide-x divide-line rounded-md border border-line bg-panel;
+  }
+
+  .dataset-profile-metrics > div {
+    @apply grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-x-2 px-3 py-2.5;
+  }
+
+  .dataset-profile-metrics svg {
+    @apply row-span-2 text-action;
+  }
+
+  .dataset-profile-metrics dt {
+    @apply text-xs text-muted;
+  }
+
+  .dataset-profile-metrics dd {
+    @apply truncate text-sm font-bold text-ink;
+  }
+
+  .dataset-column-list {
+    @apply grid grid-cols-2 gap-2 sm:grid-cols-3;
+  }
+
+  .dataset-column-list > span {
+    @apply grid min-w-0 gap-0.5 rounded-md bg-subtle px-3 py-2;
+  }
+
+  .dataset-column-list strong {
+    @apply truncate text-xs font-bold text-ink;
+  }
+
+  .dataset-column-list small {
+    @apply text-xs text-muted;
+  }
+
+  .dataset-profile-warnings {
+    @apply grid gap-1 rounded-md border border-warning/30 bg-warning-soft px-3 py-2 text-xs text-warning-strong;
+  }
+
+  .dataset-failure-message,
+  .dataset-local-error {
+    @apply rounded-md border border-danger/25 bg-danger-soft px-3 py-2 text-sm leading-5 text-danger-strong;
+  }
+
+  .csv-dataset-panel-compact .dataset-column-list,
+  .csv-dataset-panel-compact .conversation-suggestions,
+  .csv-dataset-panel-compact .dataset-profile-warnings {
+    @apply hidden;
+  }
+
+  @media (max-width: 480px) {
+    .dataset-profile-metrics {
+      @apply grid-cols-1 divide-x-0 divide-y;
+    }
   }
 }

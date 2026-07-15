@@ -4,6 +4,7 @@ import {
   authorizeMutation,
   errorResponse,
   readJson,
+  protectDatasetUpload,
   successResponse,
   type RequestContext
 } from "@/server/http";
@@ -16,6 +17,11 @@ export async function POST(
   let context: RequestContext | undefined;
   try {
     context = await authorizeMutation(request);
+    const uploadHeaders = await protectDatasetUpload(
+      request,
+      context.principal.userId,
+      "intent"
+    );
     const runtime = getRuntime();
     const handler = new InitiateDatasetUploadHandler(
       runtime.unitOfWork,
@@ -34,13 +40,15 @@ export async function POST(
       {
         uploadIntentId: result.uploadIntentId,
         datasetVersionId: result.datasetVersionId,
-        objectKey: result.objectKey,
         uploadUrl: result.uploadUrl,
         method: result.method,
         requiredHeaders: result.requiredHeaders,
         expiresAt: result.expiresAt.toISOString()
       },
-      context,
+      {
+        ...context,
+        responseHeaders: { ...context.responseHeaders, ...uploadHeaders }
+      },
       201
     );
   } catch (error) {

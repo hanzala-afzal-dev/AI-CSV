@@ -30,9 +30,10 @@ const messageTextSchema = z
 export const createConversationRequestSchema = z
   .object({ title: conversationTitleSchema.optional() })
   .strict();
-export const updateConversationRequestSchema = z
-  .object({ title: conversationTitleSchema })
-  .strict();
+export const updateConversationRequestSchema = z.union([
+  z.object({ title: conversationTitleSchema }).strict(),
+  z.object({ activeDatasetVersionId: z.string().uuid().nullable() }).strict()
+]);
 export const archiveConversationRequestSchema = z
   .object({ archived: z.boolean() })
   .strict();
@@ -80,6 +81,13 @@ export const conversationSummarySchema = z
     id: z.string().uuid(),
     title: conversationTitleSchema,
     status: conversationStatusSchema,
+    activeDataset: z
+      .object({
+        datasetId: z.string().uuid(),
+        datasetVersionId: z.string().uuid()
+      })
+      .strict()
+      .nullable(),
     lastMessageSequence: z.number().int().nonnegative(),
     lastActivityAt: z.string().datetime(),
     version: z.number().int().positive(),

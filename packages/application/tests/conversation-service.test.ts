@@ -134,6 +134,9 @@ function fakeRepository(): ConversationRepository {
     getConversation: vi.fn(async () => null),
     getDetail: vi.fn(async () => null),
     save: vi.fn(async () => null),
+    attachDatasetVersion: vi.fn(async () => ({
+      state: "conversation_not_found" as const
+    })),
     delete: vi.fn(async () => false),
     enqueueMessage: vi.fn(async () => ({
       messageId: crypto.randomUUID(),

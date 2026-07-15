@@ -1,14 +1,24 @@
-export {
-  apiErrorEnvelopeSchema,
-  apiErrorSchema,
-  apiSuccessEnvelopeSchema,
-  datasetApiRepresentationSchema
-} from "./api";
-export type { ApiError, ApiErrorEnvelope, DatasetApiRepresentation } from "./api";
+export { apiErrorEnvelopeSchema, apiErrorSchema, apiSuccessEnvelopeSchema } from "./api";
+export type { ApiError, ApiErrorEnvelope } from "./api";
 export {
   completeDatasetUploadRequestSchema,
   createDatasetRequestSchema,
+  datasetColumnProfileSchema,
+  datasetColumnSemanticTypeSchema,
+  datasetColumnStatisticsSchema,
+  datasetColumnTypeSchema,
+  datasetDetailSchema,
+  datasetFailureCodeSchema,
+  datasetLimitsSchema,
+  datasetListQuerySchema,
+  datasetListResponseSchema,
+  datasetProfileResponseSchema,
+  datasetProfileSchema,
+  datasetProfileWarningSchema,
   datasetStatusSchema,
+  datasetSummarySchema,
+  datasetVersionStatusSchema,
+  datasetVersionSummarySchema,
   initiateDatasetUploadRequestSchema,
   uploadCompletionResponseSchema,
   uploadContentTypeSchema,
@@ -17,7 +27,18 @@ export {
 export type {
   CompleteDatasetUploadRequest,
   CreateDatasetRequest,
+  DatasetColumnProfileContract,
+  DatasetDetailContract,
+  DatasetFailureCodeContract,
+  DatasetLimitsContract,
+  DatasetListResponseContract,
+  DatasetProfileContract,
+  DatasetProfileResponseContract,
+  DatasetProfileWarningContract,
   DatasetStatusContract,
+  DatasetSummaryContract,
+  DatasetVersionStatusContract,
+  DatasetVersionSummaryContract,
   InitiateDatasetUploadRequest,
   UploadCompletionResponse,
   UploadIntentResponse

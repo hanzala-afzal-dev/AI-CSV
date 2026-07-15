@@ -22,6 +22,7 @@ import {
   agentRuns,
   conversationMessages,
   conversations,
+  datasetVersions,
   outboxEvents,
   providerPreferences,
   runEvents
@@ -152,6 +153,8 @@ export class PostgresConversationRepository implements ConversationRepository {
         .set({
           title: input.conversation.title,
           status: input.conversation.status,
+          activeDatasetId: input.conversation.activeDatasetId,
+          activeDatasetVersionId: input.conversation.activeDatasetVersionId,
           version: input.conversation.version,
           updatedAt: input.conversation.updatedAt
         })
@@ -164,6 +167,60 @@ export class PostgresConversationRepository implements ConversationRepository {
         )
         .returning();
       return saved ? mapConversation(saved) : null;
+    });
+  }
+
+  public attachDatasetVersion(
+    input: Parameters<ConversationRepository["attachDatasetVersion"]>[0]
+  ): ReturnType<ConversationRepository["attachDatasetVersion"]> {
+    return this.executeForUser(input.userId, async (transaction) => {
+      const [conversation] = await transaction
+        .select()
+        .from(conversations)
+        .where(
+          and(
+            eq(conversations.userId, input.userId),
+            eq(conversations.id, input.conversationId)
+          )
+        )
+        .limit(1)
+        .for("update");
+      if (!conversation) return { state: "conversation_not_found" };
+
+      let datasetId: string | null = null;
+      if (input.datasetVersionId) {
+        const [version] = await transaction
+          .select({ datasetId: datasetVersions.datasetId })
+          .from(datasetVersions)
+          .where(
+            and(
+              eq(datasetVersions.userId, input.userId),
+              eq(datasetVersions.id, input.datasetVersionId)
+            )
+          )
+          .limit(1);
+        if (!version) return { state: "dataset_version_not_found" };
+        datasetId = version.datasetId;
+      }
+
+      const [saved] = await transaction
+        .update(conversations)
+        .set({
+          activeDatasetId: datasetId,
+          activeDatasetVersionId: input.datasetVersionId,
+          version: conversation.version + 1,
+          updatedAt: input.occurredAt
+        })
+        .where(
+          and(
+            eq(conversations.userId, input.userId),
+            eq(conversations.id, input.conversationId),
+            eq(conversations.version, conversation.version)
+          )
+        )
+        .returning();
+      if (!saved) return { state: "conversation_not_found" };
+      return { state: "attached", conversation: mapConversation(saved) };
     });
   }
 
@@ -629,6 +686,8 @@ function mapConversation(row: ConversationRow): ConversationProps {
     userId: row.userId,
     title: row.title,
     status: row.status,
+    activeDatasetId: row.activeDatasetId,
+    activeDatasetVersionId: row.activeDatasetVersionId,
     lastMessageSequence: row.lastMessageSequence,
     lastActivityAt: row.lastActivityAt,
     version: row.version,

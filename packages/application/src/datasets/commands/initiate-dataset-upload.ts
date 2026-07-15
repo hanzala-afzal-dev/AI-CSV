@@ -1,4 +1,4 @@
-import { DatasetId } from "@agentic-csv/domain";
+import { createUuidV7, DatasetId } from "@agentic-csv/domain";
 import type { ObjectStorage } from "../../ports/object-storage";
 import type { UnitOfWork } from "../../ports/unit-of-work";
 import { DatasetWorkflowError } from "../workflow-error";
@@ -14,7 +14,6 @@ export interface InitiateDatasetUploadInput {
 export interface InitiateDatasetUploadResult {
   readonly uploadIntentId: string;
   readonly datasetVersionId: string;
-  readonly objectKey: string;
   readonly uploadUrl: string;
   readonly method: "PUT";
   readonly requiredHeaders: Readonly<Record<string, string>>;
@@ -48,8 +47,8 @@ export class InitiateDatasetUploadHandler {
     }
     assertUploadCanStart(dataset.status);
 
-    const uploadIntentId = crypto.randomUUID();
-    const datasetVersionId = crypto.randomUUID();
+    const uploadIntentId = createUuidV7();
+    const datasetVersionId = createUuidV7();
     const presignedUpload = await this.objectStorage.createPresignedUpload({
       userId: input.userId,
       datasetId: input.datasetId,
@@ -111,7 +110,6 @@ export class InitiateDatasetUploadHandler {
     return {
       uploadIntentId,
       datasetVersionId,
-      objectKey: presignedUpload.objectKey,
       uploadUrl: presignedUpload.uploadUrl,
       method: "PUT",
       requiredHeaders: presignedUpload.requiredHeaders,

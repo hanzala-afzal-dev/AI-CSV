@@ -17,6 +17,9 @@ export function PromptComposer({
   disabled,
   submitting,
   providerReady,
+  datasetReady,
+  attachmentDisabled,
+  onAttach,
   run
 }: {
   readonly value: string;
@@ -26,6 +29,9 @@ export function PromptComposer({
   readonly disabled: boolean;
   readonly submitting: boolean;
   readonly providerReady: boolean | null;
+  readonly datasetReady: boolean;
+  readonly attachmentDisabled: boolean;
+  readonly onAttach: () => void;
   readonly run: AgentRunSummaryContract | null;
 }) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -37,7 +43,12 @@ export function PromptComposer({
   }, [value]);
 
   const canSubmit =
-    !disabled && !submitting && !run && providerReady === true && value.trim().length > 0;
+    !disabled &&
+    !submitting &&
+    !run &&
+    providerReady === true &&
+    datasetReady &&
+    value.trim().length > 0;
   return (
     <div className="composer-shell">
       {providerReady === false ? (
@@ -64,8 +75,14 @@ export function PromptComposer({
           value={value}
           maxLength={8_000}
           rows={1}
-          placeholder="Ask about your data"
-          disabled={disabled || submitting || Boolean(run) || providerReady !== true}
+          placeholder={datasetReady ? "Ask about your data" : "Attach a CSV to begin"}
+          disabled={
+            disabled ||
+            submitting ||
+            Boolean(run) ||
+            providerReady !== true ||
+            !datasetReady
+          }
           className="min-h-12 max-h-[180px] border-0 px-3 py-3 shadow-none focus-visible:ring-0"
           onChange={(event) => onChange(event.target.value)}
           onKeyDown={(event) => {
@@ -87,7 +104,8 @@ export function PromptComposer({
               size="icon"
               className="size-9"
               aria-label="Attach CSV"
-              disabled
+              disabled={attachmentDisabled}
+              onClick={onAttach}
             >
               <Paperclip size={18} />
             </Button>

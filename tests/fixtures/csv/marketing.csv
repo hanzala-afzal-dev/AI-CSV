@@ -1,0 +1,6 @@
+campaign_id,started_at,channel,impressions,clicks,spend,conversions
+CMP-01,2026-01-01,Search,12000,840,2200.00,96
+CMP-02,2026-01-10,Social,18000,630,1700.00,54
+CMP-03,2026-02-01,Email,9000,1260,450.00,121
+CMP-04,2026-02-15,Display,25000,375,1300.00,31
+CMP-05,2026-03-01,Search,15000,1125,2800.00,138

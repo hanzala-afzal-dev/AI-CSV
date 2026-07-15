@@ -19,6 +19,20 @@ describe("S3ObjectStorage object keys", () => {
     );
   });
 
+  it("accepts UUIDv7 dataset IDs used by the dataset aggregate", () => {
+    expect(
+      storage.createObjectKey({
+        userId: "11111111-1111-4111-8111-111111111111",
+        datasetId: "019f3bb6-9a18-7f82-85e0-86f1423eb80a",
+        datasetVersionId: "44444444-4444-4444-8444-444444444444",
+        uploadIntentId: "33333333-3333-4333-8333-333333333333",
+        filename: "sales.csv"
+      })
+    ).toBe(
+      "users/11111111-1111-4111-8111-111111111111/datasets/019f3bb6-9a18-7f82-85e0-86f1423eb80a/versions/44444444-4444-4444-8444-444444444444/original.csv"
+    );
+  });
+
   it("rejects path-like ownership identifiers", () => {
     expect(() =>
       storage.createObjectKey({

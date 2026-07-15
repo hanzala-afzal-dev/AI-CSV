@@ -58,3 +58,4 @@ export {
   DeterministicConversationResponder,
   PostgresConversationRepository
 } from "./conversations";
+export { PostgresDatasetRepository } from "./datasets";
