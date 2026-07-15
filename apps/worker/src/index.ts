@@ -1,13 +1,17 @@
 import { Worker } from "bullmq";
+import { ConversationRunService } from "@agentic-csv/application";
 import {
   createBullMqConnectionOptions,
   createDatabaseClient,
   createLogger,
   createPgPool,
+  DeterministicConversationResponder,
   loadEnv,
   OutboxDispatcher,
+  PostgresConversationRepository,
   queueNames
 } from "@agentic-csv/infrastructure";
+import { processAgentRunJob } from "./processors/agent-run.processor";
 import { processDatasetIngestionJob } from "./processors/dataset-ingestion.processor";
 
 const env = loadEnv();
@@ -15,11 +19,25 @@ const logger = createLogger(env).child({ serviceProcess: "worker" });
 const pool = createPgPool(env);
 const database = createDatabaseClient(pool);
 const outboxDispatcher = new OutboxDispatcher(database, env, logger);
+const conversationRunService = new ConversationRunService(
+  new PostgresConversationRepository(database),
+  new DeterministicConversationResponder()
+);
 let dispatchRunning = false;
 
 const datasetWorker = new Worker(
   queueNames.datasetIngestion,
   async (job) => processDatasetIngestionJob(job, logger),
+  {
+    connection: createBullMqConnectionOptions(env.REDIS_URL),
+    concurrency: env.WORKER_CONCURRENCY,
+    prefix: env.QUEUE_PREFIX
+  }
+);
+
+const agentRunWorker = new Worker(
+  queueNames.agentRun,
+  async (job) => processAgentRunJob(job, conversationRunService, logger),
   {
     connection: createBullMqConnectionOptions(env.REDIS_URL),
     concurrency: env.WORKER_CONCURRENCY,
@@ -75,6 +93,49 @@ datasetWorker.on("error", (error) => {
   logger.error({ error: { name: error.name, message: error.message } }, "worker error");
 });
 
+agentRunWorker.on("active", (job) => {
+  logger.info(
+    { queue: queueNames.agentRun, jobId: job.id, jobName: job.name },
+    "job started"
+  );
+});
+
+agentRunWorker.on("completed", (job) => {
+  logger.info(
+    { queue: queueNames.agentRun, jobId: job.id, jobName: job.name },
+    "job completed"
+  );
+});
+
+agentRunWorker.on("failed", (job, error) => {
+  const correlationId = readCorrelationId(job?.data);
+  const attempts = typeof job?.opts.attempts === "number" ? job.opts.attempts : 1;
+  const willRetry = Boolean(job && job.attemptsMade < attempts);
+  const log = willRetry ? logger.warn.bind(logger) : logger.error.bind(logger);
+  log(
+    {
+      queue: queueNames.agentRun,
+      jobId: job?.id,
+      jobName: job?.name,
+      correlationId,
+      attempt: job?.attemptsMade,
+      willRetry,
+      error: { name: error.name, message: error.message }
+    },
+    "job failed"
+  );
+});
+
+agentRunWorker.on("error", (error) => {
+  logger.error(
+    {
+      queue: queueNames.agentRun,
+      error: { name: error.name, message: error.message }
+    },
+    "worker error"
+  );
+});
+
 async function dispatchOutbox(): Promise<void> {
   if (dispatchRunning) {
     return;
@@ -97,7 +158,7 @@ void dispatchOutbox();
 async function shutdown(signal: NodeJS.Signals): Promise<void> {
   logger.info({ signal }, "worker shutdown requested");
   clearInterval(outboxTimer);
-  await datasetWorker.close();
+  await Promise.all([datasetWorker.close(), agentRunWorker.close()]);
   await outboxDispatcher.close();
   await pool.end();
   logger.info("worker shutdown complete");
@@ -113,7 +174,7 @@ process.on("SIGINT", () => {
 
 logger.info(
   {
-    queue: queueNames.datasetIngestion,
+    queues: [queueNames.datasetIngestion, queueNames.agentRun],
     concurrency: env.WORKER_CONCURRENCY
   },
   "worker started"

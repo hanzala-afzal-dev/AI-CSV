@@ -83,19 +83,34 @@ foreign resource exists.
 
 Credential write request contains the key; no credential read response does.
 
+- Credential `PUT` validates before atomically adding or replacing the stored secret. Failed replacement
+  does not alter the existing credential.
+- Validation `POST` accepts an empty JSON body and revalidates only the saved credential.
+- Models `GET` returns only compatible accessible model IDs and their supported reasoning values.
+- Preference `PUT` accepts a model ID and reasoning effort only after server-side access and compatibility
+  validation.
+- All writes require the authenticated session CSRF/origin controls. Credential validation, model catalog
+  refresh and preference validation share a dedicated per-user Redis limit.
+
 ## 4. Dataset endpoints
 
-- `POST /api/v1/datasets/upload-intents`
-- `POST /api/v1/datasets/:datasetId/versions/:versionId/complete-upload`
+- `POST /api/v1/datasets` — create the logical dataset and initial pending-upload state
+- `POST /api/v1/datasets/:datasetId/upload` — create a versioned presigned upload intent
+- `POST /api/v1/datasets/:datasetId/upload/complete` — verify object metadata and enqueue ingestion
 - `GET /api/v1/datasets`
 - `GET /api/v1/datasets/:datasetId`
 - `GET /api/v1/datasets/:datasetId/versions/:versionId/profile`
 - `DELETE /api/v1/datasets/:datasetId`
 
+Upload completion requires an `Idempotency-Key`; the intent ID in its strict JSON body selects the
+server-owned version and object key. The client never supplies ownership, a version ID, or an object key
+to completion. Browser calls use the same session/origin/CSRF controls as other authenticated mutations,
+plus upload-specific Redis buckets delivered in Phase 5.
+
 ## 5. Conversation endpoints
 
 - `POST /api/v1/conversations`
-- `GET /api/v1/conversations?cursor=...`
+- `GET /api/v1/conversations?view=active|archived&cursor=...&limit=...`
 - `GET /api/v1/conversations/:conversationId`
 - `PATCH /api/v1/conversations/:conversationId`
 - `POST /api/v1/conversations/:conversationId/archive`
@@ -122,6 +137,10 @@ type SubmitMessageResponse = {
 ```
 
 The active dataset is determined by the conversation record, not trusted from the request body.
+The first accepted submission returns `202`; an idempotent replay of the same client request ID and
+content returns `200` with the original message/run IDs. Reuse with different content returns
+`CONVERSATION_REQUEST_ID_REUSED`. A second request while a run is active returns
+`CONVERSATION_RUN_ACTIVE`.
 
 ## 7. SSE envelope
 
@@ -139,21 +158,28 @@ type RunEvent = {
 Each event type has a versioned, Zod-validated payload schema. Unknown future event types may be
 ignored by clients, but malformed known events are never published.
 
-Support `Last-Event-ID` for reconnection. Authorize every stream connection against run ownership.
+Phase 4 event types are `run.queued`, `run.started`, `assistant.delta`, `run.completed`, `run.failed`
+and `run.cancelled`. Support `Last-Event-ID` for reconnection, drain paged persisted events before
+closing a terminal stream, and authorize every connection against run ownership. SSE connections are
+bounded in lifetime so EventSource reconnect can refresh the concurrent lease.
 
 ## 8. Queue names and payloads
 
-- `dataset.ingest`
-- `dataset.embed`
-- `agent.run`
-- `conversation.compact`
-- `resource.delete`
-- `outbox.publish`
+BullMQ transport queues are workload-oriented (`dataset-ingestion`, `agent-run`,
+`knowledge-indexing`, `outbox-publishing`). Versioned job names inside their payloads are:
+
+- `dataset.ingest.v1`
+- `agent.run.v1`
+- `knowledge.index.v1`
+- `outbox.publish.v1`
+
+Future jobs such as dataset embedding, conversation compaction and resource deletion require a typed
+contract before their transport queue is introduced.
 
 All payloads:
 
 - include integer `version`;
-- include `jobId`/idempotency key;
+- include `jobName`, `correlationId` and an idempotency key;
 - include trusted `userId` and resource IDs;
 - are validated before processing;
 - avoid provider key plaintext and full CSV data.
@@ -163,7 +189,9 @@ Example:
 ```ts
 type AgentRunJobV1 = {
   version: 1;
-  jobId: string;
+  jobName: "agent.run.v1";
+  correlationId: string;
+  idempotencyKey: string;
   userId: string;
   conversationId: string;
   runId: string;

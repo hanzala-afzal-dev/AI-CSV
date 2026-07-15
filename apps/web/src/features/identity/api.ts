@@ -23,7 +23,7 @@ export async function publicMutation<T>(path: string, body: unknown): Promise<T>
 
 export async function authenticatedMutation<T>(
   path: string,
-  method: "POST" | "PATCH" | "DELETE",
+  method: "POST" | "PUT" | "PATCH" | "DELETE",
   body?: unknown
 ): Promise<T> {
   const csrf = await request<{ data: { csrfToken: string } }>("/api/v1/auth/csrf", {
@@ -34,6 +34,10 @@ export async function authenticatedMutation<T>(
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     headers: jsonHeaders(csrf.data.csrfToken)
   });
+}
+
+export async function authenticatedQuery<T>(path: string): Promise<T> {
+  return request<T>(path, { method: "GET" });
 }
 
 async function request<T>(path: string, init: RequestInit): Promise<T> {

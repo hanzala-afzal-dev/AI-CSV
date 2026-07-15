@@ -20,13 +20,14 @@ billing system; users bring their own provider credentials.
 
 ## What Comes Next
 
-The identity and tenant-boundary implementation is in place. Its remaining database, production-build,
-and browser smoke checks are tracked in the implementation ledger.
+Identity, tenant isolation, secure per-user OpenAI settings, and the persistent conversation workspace
+are in place. Conversations, messages, run state, and reconnectable server-sent events are durable in
+PostgreSQL; a deterministic placeholder assistant proves the complete workflow before model orchestration.
 
-The next product milestone is secure OpenAI settings: encrypted per-user credentials, safe key metadata,
-credential validation, an account-specific model catalog, and model/reasoning preferences. After that,
-implementation continues with persistent conversations, CSV profiling, deterministic analytics and
-charts, agent orchestration, retrieval and memory, then final security and accessibility hardening.
+The next product milestone is CSV upload and profiling: direct object-storage upload, defensive CSV
+validation, DuckDB profiling, persisted dataset status, and schema-based prompt suggestions. Later phases
+add deterministic analytics and charts, real agent orchestration with the user's OpenAI key, retrieval and
+memory, then final security and accessibility hardening.
 
 Detailed progress and the authoritative next implementation slice are tracked in
 [`docs/implementation.md`](./docs/implementation.md).

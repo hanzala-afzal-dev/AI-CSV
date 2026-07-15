@@ -23,6 +23,7 @@ export type {
   UploadIntentResponse
 } from "./dataset";
 export {
+  agentRunJobPayloadSchema,
   datasetIngestionJobPayloadSchema,
   knowledgeIndexJobPayloadSchema,
   outboxPublishJobPayloadSchema,
@@ -30,6 +31,7 @@ export {
   queuePayloadBaseSchema
 } from "./queue";
 export type {
+  AgentRunJobPayload,
   DatasetIngestionJobPayload,
   KnowledgeIndexJobPayload,
   OutboxPublishJobPayload,
@@ -37,6 +39,26 @@ export type {
 } from "./queue";
 export { agentAnalysisOutputSchema, agentAnalysisStateSchema } from "./agent";
 export type { AgentAnalysisOutputContract, AgentAnalysisStateContract } from "./agent";
+export {
+  emptyJsonRequestSchema,
+  providerCredentialStatusSchema,
+  providerCredentialSummarySchema,
+  providerCredentialWriteRequestSchema,
+  providerModelsSchema,
+  providerModelSchema,
+  providerPreferenceSchema,
+  providerPreferenceUpdateRequestSchema,
+  providerSettingsSchema,
+  reasoningEffortSchema
+} from "./provider";
+export type {
+  ProviderCredentialSummaryContract,
+  ProviderCredentialWriteRequest,
+  ProviderModelContract,
+  ProviderPreferenceContract,
+  ProviderPreferenceUpdateRequest,
+  ProviderSettingsContract
+} from "./provider";
 export {
   emailChangeRequestSchema,
   emailRequestSchema,
@@ -50,3 +72,47 @@ export {
   tokenRequestSchema
 } from "./identity";
 export type { LoginRequest, RegisterRequest, SafeUser } from "./identity";
+export {
+  agentRunStatusSchema,
+  agentRunSummarySchema,
+  archiveConversationRequestSchema,
+  assistantDeltaEventSchema,
+  conversationDetailSchema,
+  conversationListQuerySchema,
+  conversationListSchema,
+  conversationMessageContentSchema,
+  conversationMessagePartSchema,
+  conversationMessageRoleSchema,
+  conversationMessageSchema,
+  conversationMessageStatusSchema,
+  conversationStatusSchema,
+  conversationSummarySchema,
+  createConversationRequestSchema,
+  runCancelledEventSchema,
+  runCompletedEventSchema,
+  runEventSchema,
+  runFailedEventSchema,
+  runQueuedEventSchema,
+  runStartedEventSchema,
+  statusMessagePartSchema,
+  submitConversationMessageRequestSchema,
+  submitConversationMessageResponseSchema,
+  textMessagePartSchema,
+  updateConversationRequestSchema,
+  warningMessagePartSchema
+} from "./conversation";
+export type {
+  AgentRunSummaryContract,
+  ArchiveConversationRequest,
+  ConversationDetailContract,
+  ConversationListContract,
+  ConversationListQuery,
+  ConversationMessageContent,
+  ConversationMessageContract,
+  ConversationSummaryContract,
+  CreateConversationRequest,
+  RunEventContract,
+  SubmitConversationMessageRequest,
+  SubmitConversationMessageResponse,
+  UpdateConversationRequest
+} from "./conversation";

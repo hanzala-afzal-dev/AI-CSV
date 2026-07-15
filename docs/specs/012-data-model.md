@@ -71,6 +71,20 @@ Unique active credential per user/provider.
 - `model_validated_at`
 - timestamps
 
+### `security_audit_events`
+
+- `id`, `user_id`
+- event type and outcome
+- subject type and nullable subject ID
+- request correlation ID
+- allow-listed non-secret metadata JSON
+- occurred timestamp
+
+Provider credential and preference rows are tenant-owned and use RLS. The application role may select
+only safe credential summary columns directly. Encrypted fields are loaded through a dedicated
+actor-scoped repository/database function and never through ordinary settings queries. Audit events are
+append-only to the application role.
+
 ## 4. Dataset tables
 
 ### `datasets`
@@ -119,10 +133,14 @@ Unique active credential per user/provider.
 - `id`, `user_id`
 - title
 - active dataset ID/version ID nullable
-- status (`active`, `archived`, `deleted`)
+- status (`active`, `archived`)
 - last message sequence/activity
 - optimistic version
 - timestamps
+
+The Phase 4 MVP hard-deletes a conversation and its dependent chat records after explicit confirmation.
+A persisted `deleted` state is added only with a queued privacy-deletion workflow. Active dataset/version
+references are added in Phase 5 with composite same-owner foreign keys rather than nullable unguarded IDs.
 
 ### `messages`
 
@@ -152,7 +170,8 @@ Prefer the official LangGraph PostgreSQL checkpointer schema where compatible. E
 
 ### `run_events`
 
-- run ID
+- run ID plus sequence as the primary key
+- user and conversation ownership columns for composite referential checks and RLS
 - monotonic sequence
 - event type
 - safe payload JSON

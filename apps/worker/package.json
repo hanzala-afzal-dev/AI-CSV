@@ -13,6 +13,7 @@
     "test:coverage": "vitest run tests/*.test.ts --coverage --passWithNoTests"
   },
   "dependencies": {
+    "@agentic-csv/application": "workspace:*",
     "@agentic-csv/contracts": "workspace:*",
     "@agentic-csv/infrastructure": "workspace:*",
     "bullmq": "5.79.3"

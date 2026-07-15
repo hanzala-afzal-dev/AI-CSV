@@ -82,6 +82,11 @@ Left sidebar:
 
 ## 5. Chat empty state
 
+The Phase 4 shell renders the real persistent workspace, provider-readiness gate, safe suggested prompts,
+and a disabled attachment affordance. It must not simulate an uploaded dataset. Phase 5 replaces that
+affordance with the upload and ingestion states below; the conversation/sidebar/message components remain
+the stable shell rather than being rebuilt for ingestion.
+
 Before a dataset is ready:
 
 - concise product explanation

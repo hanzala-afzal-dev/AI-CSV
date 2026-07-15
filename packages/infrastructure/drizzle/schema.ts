@@ -2,9 +2,11 @@ import { sql } from "drizzle-orm";
 import {
   boolean,
   check,
+  foreignKey,
   index,
   integer,
   jsonb,
+  primaryKey,
   pgEnum,
   pgTable,
   text,
@@ -133,6 +135,341 @@ export const passwordResetTokens = pgTable(
     uniqueIndex("password_reset_tokens_hash_unique").on(table.tokenHash),
     index("password_reset_tokens_user_idx").on(table.userId),
     index("password_reset_tokens_expiry_idx").on(table.expiresAt)
+  ]
+);
+
+export const providerCredentialStatusEnum = pgEnum("provider_credential_status", [
+  "valid",
+  "invalid"
+]);
+
+export const providerCredentials = pgTable(
+  "provider_credentials",
+  {
+    id: uuid("id").primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    provider: varchar("provider", { length: 32 }).notNull(),
+    ciphertext: text("ciphertext").notNull(),
+    nonce: varchar("nonce", { length: 24 }).notNull(),
+    authTag: varchar("auth_tag", { length: 24 }).notNull(),
+    encryptedDataKey: text("encrypted_data_key"),
+    algorithm: varchar("algorithm", { length: 32 }).notNull(),
+    keyVersion: varchar("key_version", { length: 64 }).notNull(),
+    last4: varchar("last4", { length: 4 }).notNull(),
+    fingerprint: varchar("fingerprint", { length: 64 }).notNull(),
+    status: providerCredentialStatusEnum("status").notNull(),
+    validatedAt: timestamp("validated_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
+  },
+  (table) => [
+    uniqueIndex("provider_credentials_user_provider_unique").on(
+      table.userId,
+      table.provider
+    ),
+    index("provider_credentials_user_status_idx").on(table.userId, table.status),
+    check("provider_credentials_provider_check", sql`${table.provider} = 'openai'`),
+    check(
+      "provider_credentials_algorithm_check",
+      sql`${table.algorithm} = 'AES-256-GCM'`
+    ),
+    check("provider_credentials_last4_check", sql`char_length(${table.last4}) = 4`),
+    check(
+      "provider_credentials_nonce_check",
+      sql`char_length(${table.nonce}) = 16 and ${table.nonce} ~ '^[A-Za-z0-9+/]{16}$'`
+    ),
+    check(
+      "provider_credentials_auth_tag_check",
+      sql`char_length(${table.authTag}) = 24 and ${table.authTag} ~ '^[A-Za-z0-9+/]{22}==$'`
+    ),
+    check(
+      "provider_credentials_fingerprint_check",
+      sql`${table.fingerprint} ~ '^[0-9a-f]{64}$'`
+    ),
+    check(
+      "provider_credentials_key_version_check",
+      sql`${table.keyVersion} ~ '^[A-Za-z0-9._-]{1,64}$'`
+    )
+  ]
+);
+
+export const providerPreferences = pgTable(
+  "provider_preferences",
+  {
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    provider: varchar("provider", { length: 32 }).notNull(),
+    modelId: varchar("model_id", { length: 200 }).notNull(),
+    reasoningEffort: varchar("reasoning_effort", { length: 32 }).notNull(),
+    reasoningMode: varchar("reasoning_mode", { length: 64 }),
+    modelValidatedAt: timestamp("model_validated_at", { withTimezone: true }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
+  },
+  (table) => [
+    primaryKey({ columns: [table.userId, table.provider] }),
+    check("provider_preferences_provider_check", sql`${table.provider} = 'openai'`),
+    check(
+      "provider_preferences_model_id_check",
+      sql`${table.modelId} ~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$'`
+    ),
+    check(
+      "provider_preferences_reasoning_effort_check",
+      sql`${table.reasoningEffort} in ('none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max')`
+    )
+  ]
+);
+
+export const securityAuditEvents = pgTable(
+  "security_audit_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    eventType: varchar("event_type", { length: 120 }).notNull(),
+    outcome: varchar("outcome", { length: 16 }).notNull(),
+    subjectType: varchar("subject_type", { length: 80 }).notNull(),
+    subjectId: uuid("subject_id"),
+    correlationId: uuid("correlation_id").notNull(),
+    metadata: jsonb("metadata").notNull().default({}),
+    occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull()
+  },
+  (table) => [
+    index("security_audit_events_user_occurred_idx").on(table.userId, table.occurredAt),
+    check(
+      "security_audit_events_outcome_check",
+      sql`${table.outcome} in ('success', 'failure')`
+    ),
+    check(
+      "security_audit_events_event_type_check",
+      sql`${table.eventType} in ('provider.credential.added', 'provider.credential.replaced', 'provider.credential.validation_succeeded', 'provider.credential.validation_failed', 'provider.credential.deleted', 'provider.preferences.fallback_applied', 'provider.preferences.updated')`
+    ),
+    check(
+      "security_audit_events_subject_type_check",
+      sql`${table.subjectType} = 'provider_credential'`
+    ),
+    check(
+      "security_audit_events_metadata_keys_check",
+      sql`jsonb_typeof(${table.metadata}) = 'object' and (${table.metadata} - array['provider','operation','code','fallbackApplied','modelId','reasoningEffort']::text[]) = '{}'::jsonb`
+    )
+  ]
+);
+
+export const conversationStatusEnum = pgEnum("conversation_status", [
+  "active",
+  "archived"
+]);
+
+export const conversationMessageRoleEnum = pgEnum("conversation_message_role", [
+  "user",
+  "assistant",
+  "system_event",
+  "tool"
+]);
+
+export const conversationMessageStatusEnum = pgEnum("conversation_message_status", [
+  "streaming",
+  "final",
+  "failed"
+]);
+
+export const agentRunStatusEnum = pgEnum("agent_run_status", [
+  "queued",
+  "running",
+  "waiting_for_user",
+  "completed",
+  "failed",
+  "cancelled"
+]);
+
+export const conversations = pgTable(
+  "conversations",
+  {
+    id: uuid("id").primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    title: varchar("title", { length: 120 }).notNull(),
+    status: conversationStatusEnum("status").notNull().default("active"),
+    lastMessageSequence: integer("last_message_sequence").notNull().default(0),
+    lastActivityAt: timestamp("last_activity_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    version: integer("version").notNull().default(1),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
+  },
+  (table) => [
+    uniqueIndex("conversations_user_id_id_unique").on(table.userId, table.id),
+    index("conversations_user_status_activity_idx").on(
+      table.userId,
+      table.status,
+      table.lastActivityAt.desc(),
+      table.id.desc()
+    ),
+    check(
+      "conversations_title_check",
+      sql`char_length(btrim(${table.title})) between 1 and 120 and ${table.title} = btrim(${table.title})`
+    ),
+    check("conversations_sequence_check", sql`${table.lastMessageSequence} >= 0`),
+    check("conversations_version_check", sql`${table.version} > 0`)
+  ]
+);
+
+export const conversationMessages = pgTable(
+  "messages",
+  {
+    id: uuid("id").primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    conversationId: uuid("conversation_id").notNull(),
+    sequence: integer("sequence").notNull(),
+    role: conversationMessageRoleEnum("role").notNull(),
+    status: conversationMessageStatusEnum("status").notNull(),
+    contentParts: jsonb("content_parts").notNull(),
+    providerResponseReference: varchar("provider_response_reference", { length: 255 }),
+    usageMetadata: jsonb("usage_metadata"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    finalizedAt: timestamp("finalized_at", { withTimezone: true })
+  },
+  (table) => [
+    uniqueIndex("messages_conversation_sequence_unique").on(
+      table.conversationId,
+      table.sequence
+    ),
+    uniqueIndex("messages_user_conversation_id_unique").on(
+      table.userId,
+      table.conversationId,
+      table.id
+    ),
+    index("messages_conversation_created_idx").on(table.conversationId, table.createdAt),
+    foreignKey({
+      name: "messages_user_conversation_fk",
+      columns: [table.userId, table.conversationId],
+      foreignColumns: [conversations.userId, conversations.id]
+    }).onDelete("cascade"),
+    check("messages_sequence_check", sql`${table.sequence} > 0`),
+    check(
+      "messages_content_parts_check",
+      sql`jsonb_typeof(${table.contentParts}) = 'object'
+        and ${table.contentParts}->>'version' = '1'
+        and jsonb_typeof(${table.contentParts}->'parts') = 'array'
+        and jsonb_array_length(${table.contentParts}->'parts') between 1 and 16`
+    ),
+    check(
+      "messages_finalized_at_check",
+      sql`(${table.status} = 'streaming' and ${table.finalizedAt} is null)
+        or (${table.status} in ('final', 'failed') and ${table.finalizedAt} is not null)`
+    )
+  ]
+);
+
+export const agentRuns = pgTable(
+  "agent_runs",
+  {
+    id: uuid("id").primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    conversationId: uuid("conversation_id").notNull(),
+    userMessageId: uuid("user_message_id").notNull(),
+    status: agentRunStatusEnum("status").notNull(),
+    clientRequestId: uuid("client_request_id").notNull(),
+    selectedModel: varchar("selected_model", { length: 200 }),
+    selectedReasoningEffort: varchar("selected_reasoning_effort", { length: 32 }),
+    stepCount: integer("step_count").notNull().default(0),
+    repairCount: integer("repair_count").notNull().default(0),
+    failureCode: varchar("failure_code", { length: 80 }),
+    failureMessage: varchar("failure_message", { length: 500 }),
+    startedAt: timestamp("started_at", { withTimezone: true }),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
+  },
+  (table) => [
+    uniqueIndex("agent_runs_user_client_request_unique").on(
+      table.userId,
+      table.clientRequestId
+    ),
+    uniqueIndex("agent_runs_user_conversation_id_unique").on(
+      table.userId,
+      table.conversationId,
+      table.id
+    ),
+    uniqueIndex("agent_runs_one_active_per_conversation_unique")
+      .on(table.conversationId)
+      .where(sql`${table.status} in ('queued', 'running', 'waiting_for_user')`),
+    index("agent_runs_conversation_created_idx").on(
+      table.conversationId,
+      table.createdAt
+    ),
+    foreignKey({
+      name: "agent_runs_user_conversation_fk",
+      columns: [table.userId, table.conversationId],
+      foreignColumns: [conversations.userId, conversations.id]
+    }).onDelete("cascade"),
+    foreignKey({
+      name: "agent_runs_user_conversation_message_fk",
+      columns: [table.userId, table.conversationId, table.userMessageId],
+      foreignColumns: [
+        conversationMessages.userId,
+        conversationMessages.conversationId,
+        conversationMessages.id
+      ]
+    }).onDelete("cascade"),
+    check(
+      "agent_runs_count_check",
+      sql`${table.stepCount} >= 0 and ${table.repairCount} >= 0`
+    ),
+    check(
+      "agent_runs_terminal_timestamp_check",
+      sql`(${table.status} = 'completed' and ${table.completedAt} is not null)
+        or (${table.status} = 'cancelled' and ${table.cancelledAt} is not null)
+        or (${table.status} in ('queued', 'running', 'waiting_for_user', 'failed'))`
+    )
+  ]
+);
+
+export const runEvents = pgTable(
+  "run_events",
+  {
+    runId: uuid("run_id").notNull(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    conversationId: uuid("conversation_id").notNull(),
+    sequence: integer("sequence").notNull(),
+    eventType: varchar("event_type", { length: 80 }).notNull(),
+    payload: jsonb("payload").notNull(),
+    occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull().defaultNow()
+  },
+  (table) => [
+    primaryKey({ columns: [table.runId, table.sequence] }),
+    index("run_events_user_run_sequence_idx").on(
+      table.userId,
+      table.runId,
+      table.sequence
+    ),
+    foreignKey({
+      name: "run_events_user_conversation_run_fk",
+      columns: [table.userId, table.conversationId, table.runId],
+      foreignColumns: [agentRuns.userId, agentRuns.conversationId, agentRuns.id]
+    }).onDelete("cascade"),
+    check("run_events_sequence_check", sql`${table.sequence} > 0`),
+    check(
+      "run_events_type_check",
+      sql`${table.eventType} in ('run.queued', 'run.started', 'assistant.delta', 'run.completed', 'run.failed', 'run.cancelled')`
+    ),
+    check(
+      "run_events_payload_check",
+      sql`jsonb_typeof(${table.payload}) = 'object' and ${table.payload}->>'version' = '1'`
+    )
   ]
 );
 

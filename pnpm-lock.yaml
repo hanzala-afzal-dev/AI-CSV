@@ -134,6 +134,9 @@ importers:
 
   apps/worker:
     dependencies:
+      "@agentic-csv/application":
+        specifier: workspace:*
+        version: link:../../packages/application
       "@agentic-csv/contracts":
         specifier: workspace:*
         version: link:../../packages/contracts
