@@ -15,6 +15,8 @@ describeIntegration("PostgreSQL tenant RLS", () => {
   const aliceDatasetId = randomUUID();
   const bobDatasetId = randomUUID();
   const aliceDatasetVersionId = randomUUID();
+  const bobDatasetVersionId = randomUUID();
+  const aliceConversationId = randomUUID();
   const aliceApiKeyHash = "a".repeat(64);
 
   beforeAll(async () => {
@@ -32,14 +34,68 @@ describeIntegration("PostgreSQL tenant RLS", () => {
       `insert into dataset_versions
          (id, user_id, dataset_id, version_number, original_filename, mime_type,
           object_key, size_bytes, checksum)
-       values ($1, $2, $3, 1, 'alice.csv', 'text/csv', $4, 128, $5)`,
+       values ($1, $2, $3, 1, 'alice.csv', 'text/csv', $4, 128, $5),
+              ($6, $7, $8, 1, 'bob.csv', 'text/csv', $9, 64, $10)`,
       [
         aliceDatasetVersionId,
         aliceId,
         aliceDatasetId,
         `users/${aliceId}/datasets/${aliceDatasetId}/versions/${aliceDatasetVersionId}/original.csv`,
-        "A".repeat(44)
+        "A".repeat(44),
+        bobDatasetVersionId,
+        bobId,
+        bobDatasetId,
+        `users/${bobId}/datasets/${bobDatasetId}/versions/${bobDatasetVersionId}/original.csv`,
+        "B".repeat(44)
       ]
+    );
+    await adminPool.query(
+      `insert into dataset_columns
+         (user_id, dataset_id, dataset_version_id, ordinal, original_name,
+          canonical_name, inferred_type, semantic_type, nullable, statistics)
+       values ($1, $2, $3, 0, 'amount', 'amount', 'integer', 'numeric', false, $4::jsonb),
+              ($5, $6, $7, 0, 'secret', 'secret', 'text', 'free_text', false, $4::jsonb)`,
+      [
+        aliceId,
+        aliceDatasetId,
+        aliceDatasetVersionId,
+        JSON.stringify({
+          version: 1,
+          nullCount: 0,
+          nullPercentage: 0,
+          distinctCount: 1,
+          min: "1",
+          max: "1",
+          mean: 1,
+          standardDeviation: 0,
+          exampleValues: ["1"]
+        }),
+        bobId,
+        bobDatasetId,
+        bobDatasetVersionId
+      ]
+    );
+    await adminPool.query(
+      `insert into dataset_profiles
+         (dataset_version_id, user_id, dataset_id, profile, warnings,
+          suggested_prompts, generated_at)
+       values ($1, $2, $3, $4::jsonb, '[]'::jsonb, $5::jsonb, now()),
+              ($6, $7, $8, $4::jsonb, '[]'::jsonb, $5::jsonb, now())`,
+      [
+        aliceDatasetVersionId,
+        aliceId,
+        aliceDatasetId,
+        JSON.stringify({ version: 1 }),
+        JSON.stringify(["One", "Two", "Three"]),
+        bobDatasetVersionId,
+        bobId,
+        bobDatasetId
+      ]
+    );
+    await adminPool.query(
+      `insert into conversations (id, user_id, title)
+       values ($1, $2, 'Alice dataset conversation')`,
+      [aliceConversationId, aliceId]
     );
     await adminPool.query(
       `insert into api_keys (user_id, name, key_prefix, key_hash)
@@ -110,11 +166,77 @@ describeIntegration("PostgreSQL tenant RLS", () => {
             `insert into dataset_versions
                (id, user_id, dataset_id, version_number, original_filename, mime_type,
                 object_key, size_bytes, checksum)
-             values ($1, $2, $3, 1, 'cross.csv', 'text/csv', $4, 1, $5)`,
+             values ($1, $2, $3, 2, 'cross.csv', 'text/csv', $4, 1, $5)`,
             [randomUUID(), aliceId, bobDatasetId, "cross/original.csv", "B".repeat(44)]
           )
         )
       ).rejects.toMatchObject({ code: "23503" });
+    } finally {
+      client.release();
+    }
+  });
+
+  it("isolates every Phase 5 profile table and rejects forged ownership", async () => {
+    const client = await applicationPool.connect();
+    try {
+      const visible = await inActorTransaction(client, aliceId, async () => {
+        const columns = await client.query(
+          `select original_name from dataset_columns order by original_name`
+        );
+        const profiles = await client.query(
+          `select dataset_version_id from dataset_profiles order by dataset_version_id`
+        );
+        return { columns: columns.rows, profiles: profiles.rows };
+      });
+      expect(visible.columns).toEqual([{ original_name: "amount" }]);
+      expect(visible.profiles).toEqual([{ dataset_version_id: aliceDatasetVersionId }]);
+
+      await expect(
+        inActorTransaction(client, aliceId, () =>
+          client.query(
+            `insert into dataset_columns
+               (user_id, dataset_id, dataset_version_id, ordinal, original_name,
+                canonical_name, inferred_type, semantic_type, nullable, statistics)
+             values ($1, $2, $3, 1, 'forged', 'forged', 'text', 'free_text',
+                     false, '{"version":1}'::jsonb)`,
+            [aliceId, bobDatasetId, bobDatasetVersionId]
+          )
+        )
+      ).rejects.toMatchObject({ code: "23503" });
+    } finally {
+      client.release();
+    }
+  });
+
+  it("enforces same-owner dataset/version references on conversations", async () => {
+    const client = await applicationPool.connect();
+    try {
+      await expect(
+        inActorTransaction(client, aliceId, () =>
+          client.query(
+            `update conversations
+             set active_dataset_id = $1, active_dataset_version_id = $2
+             where id = $3`,
+            [bobDatasetId, bobDatasetVersionId, aliceConversationId]
+          )
+        )
+      ).rejects.toMatchObject({ code: "23503" });
+
+      const attached = await inActorTransaction(client, aliceId, () =>
+        client.query(
+          `update conversations
+           set active_dataset_id = $1, active_dataset_version_id = $2
+           where id = $3
+           returning active_dataset_id, active_dataset_version_id`,
+          [aliceDatasetId, aliceDatasetVersionId, aliceConversationId]
+        )
+      );
+      expect(attached.rows).toEqual([
+        {
+          active_dataset_id: aliceDatasetId,
+          active_dataset_version_id: aliceDatasetVersionId
+        }
+      ]);
     } finally {
       client.release();
     }

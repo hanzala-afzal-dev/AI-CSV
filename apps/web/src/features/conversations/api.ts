@@ -56,6 +56,18 @@ export async function renameConversation(
   return conversationSummarySchema.parse(response.data.conversation);
 }
 
+export async function setConversationDataset(
+  conversationId: string,
+  activeDatasetVersionId: string | null
+): Promise<ConversationSummaryContract> {
+  const response = await authenticatedMutation<
+    Envelope<{ readonly conversation: unknown }>
+  >(`/api/v1/conversations/${conversationId}`, "PATCH", {
+    activeDatasetVersionId
+  });
+  return conversationSummarySchema.parse(response.data.conversation);
+}
+
 export async function setConversationArchived(
   conversationId: string,
   archived: boolean

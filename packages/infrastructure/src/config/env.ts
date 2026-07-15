@@ -30,6 +30,13 @@ const integerFromString = (schema: z.ZodNumber) =>
     return value;
   }, schema.int());
 
+const numberFromString = (schema: z.ZodNumber) =>
+  z.preprocess((value) => {
+    if (typeof value === "number") return value;
+    if (typeof value === "string" && value.trim() !== "") return Number(value);
+    return value;
+  }, schema);
+
 const base64EncryptionKey = z.string().refine(isBase64EncryptionKey, {
   message: "Must be a canonical base64-encoded 32-byte key."
 });
@@ -106,6 +113,19 @@ export const envSchema = z
     S3_FORCE_PATH_STYLE: booleanFromString,
     UPLOAD_MAX_BYTES: integerFromString(z.number().positive()),
     PRESIGNED_URL_TTL_SECONDS: integerFromString(z.number().positive()),
+    CSV_MAX_ROWS: integerFromString(z.number().min(1).max(10_000_000)).default(1_000_000),
+    CSV_MAX_COLUMNS: integerFromString(z.number().min(1).max(10_000)).default(500),
+    CSV_MAX_FIELD_CHARACTERS: integerFromString(
+      z.number().min(1).max(10_000_000)
+    ).default(1_000_000),
+    CSV_MAX_MALFORMED_ROW_RATIO: numberFromString(z.number().min(0).max(0.1)).default(0),
+    CSV_PROFILE_TIMEOUT_MS: integerFromString(z.number().min(1_000).max(600_000)).default(
+      60_000
+    ),
+    DUCKDB_MEMORY_LIMIT_MB: integerFromString(z.number().min(64).max(4096)).default(512),
+    INGESTION_CLAIM_TTL_SECONDS: integerFromString(z.number().min(30).max(3600)).default(
+      300
+    ),
 
     OPENAI_API_BASE_URL: z.string().url().default("https://api.openai.com/v1"),
     OPENAI_VALIDATION_TIMEOUT_MS: integerFromString(
@@ -140,6 +160,12 @@ export const envSchema = z
     RATE_LIMIT_SSE_CONNECTION_MAX_REQUESTS: integerFromString(
       z.number().positive().max(100)
     ).default(30),
+    RATE_LIMIT_UPLOAD_INTENT_MAX_REQUESTS: integerFromString(
+      z.number().positive().max(100)
+    ).default(10),
+    RATE_LIMIT_UPLOAD_COMPLETION_MAX_REQUESTS: integerFromString(
+      z.number().positive().max(200)
+    ).default(20),
     SSE_MAX_CONNECTIONS_PER_USER: integerFromString(z.number().min(1).max(10)).default(3),
     SSE_CONNECTION_LEASE_SECONDS: integerFromString(z.number().min(10).max(120)).default(
       35

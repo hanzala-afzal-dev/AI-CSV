@@ -31,6 +31,13 @@ export function safeConversation(conversation: ConversationProps) {
     id: conversation.id,
     title: conversation.title,
     status: conversation.status,
+    activeDataset:
+      conversation.activeDatasetId && conversation.activeDatasetVersionId
+        ? {
+            datasetId: conversation.activeDatasetId,
+            datasetVersionId: conversation.activeDatasetVersionId
+          }
+        : null,
     lastMessageSequence: conversation.lastMessageSequence,
     lastActivityAt: conversation.lastActivityAt.toISOString(),
     version: conversation.version,

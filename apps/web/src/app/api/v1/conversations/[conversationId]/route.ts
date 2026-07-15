@@ -47,11 +47,18 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     correlationId = context.correlationId;
     const conversationId = idSchema.parse((await params).conversationId);
     const body = updateConversationRequestSchema.parse(await readJson(request));
-    const conversation = await getRuntime().conversationService.rename({
-      userId: context.session.userId,
-      conversationId,
-      title: body.title
-    });
+    const conversation =
+      "title" in body
+        ? await getRuntime().conversationService.rename({
+            userId: context.session.userId,
+            conversationId,
+            title: body.title
+          })
+        : await getRuntime().conversationService.setActiveDataset({
+            userId: context.session.userId,
+            conversationId,
+            datasetVersionId: body.activeDatasetVersionId
+          });
     return conversationResponse(
       { conversation: safeConversation(conversation) },
       context.correlationId,

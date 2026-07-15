@@ -1,0 +1,6 @@
+ticket_id,created_at,priority,category,resolution_hours,summary
+TCK-001,2026-03-01,high,billing,4.5,Duplicate invoice generated after plan change
+TCK-002,2026-03-02,medium,account,8.0,Verification email arrived after the link expired
+TCK-003,2026-03-03,low,reporting,19.5,Export used an unexpected date format
+TCK-004,2026-03-05,high,access,2.0,Team owner could not revoke an old session
+TCK-005,2026-03-07,medium,reporting,11.0,Dashboard filter was not retained after reload

@@ -172,6 +172,22 @@ export function protectConversationStream(
   );
 }
 
+export async function protectDatasetUpload(
+  request: Request,
+  userId: string,
+  category: "create" | "intent" | "completion"
+): Promise<Readonly<Record<string, string>>> {
+  const runtime = getRuntime();
+  const limit =
+    category === "completion"
+      ? runtime.env.RATE_LIMIT_UPLOAD_COMPLETION_MAX_REQUESTS
+      : runtime.env.RATE_LIMIT_UPLOAD_INTENT_MAX_REQUESTS;
+  const userHeaders = await enforceRateLimit(`dataset:${category}:user:${userId}`, limit);
+  const ipBucket = hashPrivateValue(readClientAddress(request), runtime.env.AUTH_SECRET);
+  await enforceRateLimit(`dataset:${category}:ip:${ipBucket}`, limit);
+  return userHeaders;
+}
+
 export async function acquireConversationStreamLease(userId: string): Promise<{
   readonly leaseId: string;
   release(): Promise<void>;
@@ -557,7 +573,8 @@ function mapError(error: unknown): {
       CONVERSATION_ARCHIVED: 409,
       CONVERSATION_CONFLICT: 409,
       CONVERSATION_RUN_ACTIVE: 409,
-      CONVERSATION_REQUEST_ID_REUSED: 409
+      CONVERSATION_REQUEST_ID_REUSED: 409,
+      CONVERSATION_DATASET_NOT_FOUND: 404
     };
     return {
       status: statusByCode[error.code] ?? 400,
@@ -579,6 +596,7 @@ function mapError(error: unknown): {
       DATASET_NOT_FOUND: 404,
       UPLOAD_INTENT_NOT_FOUND: 404,
       DATASET_UPLOAD_STATE_INVALID: 409,
+      DATASET_PROFILE_NOT_READY: 409,
       UPLOAD_TOO_LARGE: 413,
       UPLOAD_INTENT_EXPIRED: 410,
       UPLOAD_OBJECT_METADATA_MISMATCH: 422,

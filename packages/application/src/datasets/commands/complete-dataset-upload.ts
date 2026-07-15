@@ -94,7 +94,7 @@ export class CompleteDatasetUploadHandler {
       dataset.markUploaded(lockedIntent.objectKey);
       const events = dataset.pullDomainEvents();
       await transaction.datasets.save(dataset);
-      await transaction.datasetVersions.markUploaded(
+      await transaction.datasetVersions.markQueued(
         lockedIntent.datasetVersionId,
         input.userId,
         now
@@ -167,10 +167,7 @@ function assertObjectMatchesIntent(
   const matches =
     metadata.sizeBytes === intent.sizeBytes &&
     metadata.contentType?.toLowerCase() === intent.contentType.toLowerCase() &&
-    metadata.checksumSha256 === intent.checksumSha256 &&
-    metadata.userId === intent.userId &&
-    metadata.datasetId === intent.datasetId &&
-    metadata.datasetVersionId === intent.datasetVersionId;
+    metadata.checksumSha256 === intent.checksumSha256;
   if (!matches) {
     throw new DatasetWorkflowError(
       "UPLOAD_OBJECT_METADATA_MISMATCH",

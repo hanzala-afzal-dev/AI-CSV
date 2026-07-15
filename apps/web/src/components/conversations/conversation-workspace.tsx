@@ -7,8 +7,12 @@ import {
   runEventSchema,
   type AgentRunSummaryContract,
   type ConversationDetailContract,
-  type ConversationSummaryContract
+  type ConversationSummaryContract,
+  type DatasetDetailContract,
+  type DatasetLimitsContract,
+  type DatasetProfileContract
 } from "@agentic-csv/contracts";
+import { CsvDatasetPanel } from "@/components/datasets/csv-dataset-panel";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
@@ -17,6 +21,16 @@ import { Label } from "@/components/ui/label";
 import { Tooltip } from "@/components/ui/tooltip";
 import { ClientApiError } from "@/features/identity/api";
 import {
+  completeUpload,
+  createDataset,
+  createUploadIntent,
+  getDataset,
+  getDatasetProfile,
+  listDatasets,
+  sha256Base64,
+  uploadToSignedUrl
+} from "@/features/datasets/api";
+import {
   cancelRun,
   createConversation,
   deleteConversation,
@@ -24,6 +38,7 @@ import {
   getProviderSettings,
   listConversations,
   renameConversation,
+  setConversationDataset,
   setConversationArchived,
   submitMessage
 } from "@/features/conversations/api";
@@ -44,6 +59,18 @@ export function ConversationWorkspace({
   const [detail, setDetail] = useState<ConversationDetailContract | null>(null);
   const [detailLoading, setDetailLoading] = useState(Boolean(initialConversationId));
   const [providerReady, setProviderReady] = useState<boolean | null>(null);
+  const [dataset, setDataset] = useState<DatasetDetailContract | null>(null);
+  const [datasetProfile, setDatasetProfile] = useState<DatasetProfileContract | null>(
+    null
+  );
+  const [datasetLimits, setDatasetLimits] = useState<DatasetLimitsContract | null>(null);
+  const [activeDataset, setActiveDataset] = useState<{
+    readonly datasetId: string;
+    readonly datasetVersionId: string;
+  } | null>(null);
+  const [datasetBusy, setDatasetBusy] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+  const [datasetError, setDatasetError] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [run, setRun] = useState<AgentRunSummaryContract | null>(null);
   const [streamedText, setStreamedText] = useState("");
@@ -61,6 +88,7 @@ export function ConversationWorkspace({
     null
   );
   const lastEventSequences = useRef(new Map<string, number>());
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleError = useCallback(
     (cause: unknown, fallback: string) => {
@@ -101,13 +129,47 @@ export function ConversationWorkspace({
         const next = await getConversation(conversationId);
         setDetail(next);
         setRun(next.activeRun);
+        setActiveDataset(next.conversation.activeDataset);
         if (next.conversation.status === "archived") setView("archived");
       } catch (cause) {
         setDetail(null);
         setRun(null);
+        setActiveDataset(null);
         handleError(cause, "Conversation could not be loaded.");
       } finally {
         setDetailLoading(false);
+      }
+    },
+    [handleError]
+  );
+
+  const loadDataset = useCallback(
+    async (selection: {
+      readonly datasetId: string;
+      readonly datasetVersionId: string;
+    }) => {
+      try {
+        const next = await getDataset(selection.datasetId);
+        setDataset(next);
+        const selected = next.versions.find(
+          (version) => version.id === selection.datasetVersionId
+        );
+        if (selected?.status === "ready") {
+          const result = await getDatasetProfile(
+            selection.datasetId,
+            selection.datasetVersionId
+          );
+          setDatasetProfile(result.profile);
+        } else {
+          setDatasetProfile(null);
+        }
+        setDatasetError(null);
+      } catch (cause) {
+        if (cause instanceof ClientApiError && cause.status === 409) {
+          setDatasetProfile(null);
+          return;
+        }
+        handleError(cause, "Dataset status could not be loaded.");
       }
     },
     [handleError]
@@ -123,11 +185,55 @@ export function ConversationWorkspace({
     if (!initialConversationId) {
       setDetail(null);
       setRun(null);
+      setActiveDataset(null);
+      setDataset(null);
+      setDatasetProfile(null);
       setDetailLoading(false);
       return;
     }
     void loadDetail(initialConversationId);
   }, [initialConversationId, loadDetail]);
+
+  useEffect(() => {
+    if (!activeDataset) {
+      setDataset(null);
+      setDatasetProfile(null);
+      return;
+    }
+    void loadDataset(activeDataset);
+  }, [activeDataset, loadDataset]);
+
+  useEffect(() => {
+    if (!activeDataset || !dataset?.activeVersion) return;
+    if (
+      ![
+        "pending_upload",
+        "uploaded",
+        "queued",
+        "validating",
+        "profiling",
+        "indexing"
+      ].includes(dataset.activeVersion.status)
+    ) {
+      return;
+    }
+    const timer = window.setTimeout(() => void loadDataset(activeDataset), 1500);
+    return () => window.clearTimeout(timer);
+  }, [activeDataset, dataset?.activeVersion, loadDataset]);
+
+  useEffect(() => {
+    let active = true;
+    void listDatasets()
+      .then((result) => {
+        if (active) setDatasetLimits(result.limits);
+      })
+      .catch((cause) => {
+        if (active) handleError(cause, "Upload limits could not be loaded.");
+      });
+    return () => {
+      active = false;
+    };
+  }, [handleError]);
 
   useEffect(() => {
     let active = true;
@@ -232,9 +338,90 @@ export function ConversationWorkspace({
     }
   };
 
+  const uploadCsv = async (file: File) => {
+    const maxBytes = datasetLimits?.maxBytes ?? 100 * 1024 * 1024;
+    if (!file.name.toLowerCase().endsWith(".csv")) {
+      setDatasetError("Select a file with a .csv extension.");
+      return;
+    }
+    if (file.size < 1) {
+      setDatasetError("The selected CSV is empty.");
+      return;
+    }
+    if (file.size > maxBytes) {
+      setDatasetError(`The selected CSV exceeds the ${formatBytes(maxBytes)} limit.`);
+      return;
+    }
+
+    setDatasetBusy(true);
+    setDatasetError(null);
+    setUploadProgress(0);
+    try {
+      const checksumSha256 = await sha256Base64(file);
+      let conversationId = initialConversationId;
+      if (!conversationId) {
+        const conversation = await createConversation();
+        conversationId = conversation.id;
+        setConversations((current) => uniqueConversations([conversation, ...current]));
+        router.push(`/app/${conversation.id}`);
+      }
+
+      const reusable =
+        dataset && (dataset.status === "pending_upload" || dataset.status === "failed")
+          ? dataset
+          : null;
+      const target = reusable ?? (await createDataset(file));
+      const intent = await createUploadIntent(target.id, file, checksumSha256);
+      const attached = await setConversationDataset(
+        conversationId,
+        intent.datasetVersionId
+      );
+      const selection = {
+        datasetId: target.id,
+        datasetVersionId: intent.datasetVersionId
+      };
+      setActiveDataset(selection);
+      setConversations((current) =>
+        current.map((conversation) =>
+          conversation.id === attached.id ? attached : conversation
+        )
+      );
+      setDetail((current) =>
+        current?.conversation.id === attached.id
+          ? { ...current, conversation: attached }
+          : current
+      );
+      await loadDataset(selection);
+      await uploadToSignedUrl(intent, file, setUploadProgress);
+      await completeUpload(target.id, intent.uploadIntentId);
+      setUploadProgress(null);
+      await Promise.all([loadDataset(selection), loadList()]);
+    } catch (cause) {
+      if (cause instanceof ClientApiError && cause.status === 401) {
+        router.replace("/login");
+      } else {
+        setDatasetError(
+          cause instanceof Error ? cause.message : "The CSV could not be uploaded."
+        );
+      }
+    } finally {
+      setDatasetBusy(false);
+      setUploadProgress(null);
+    }
+  };
+
   const send = async () => {
     const content = draft.trim();
-    if (!content || submitting || run || providerReady !== true) return;
+    if (
+      !content ||
+      submitting ||
+      run ||
+      providerReady !== true ||
+      dataset?.activeVersion?.status !== "ready" ||
+      !datasetProfile
+    ) {
+      return;
+    }
     setSubmitting(true);
     setError(null);
     setRunError(null);
@@ -343,8 +530,38 @@ export function ConversationWorkspace({
 
   const current = detail?.conversation ?? null;
   const archived = current?.status === "archived";
+  const datasetReady =
+    dataset?.activeVersion?.status === "ready" && datasetProfile !== null;
+  const maxUploadBytes = datasetLimits?.maxBytes ?? 100 * 1024 * 1024;
+  const datasetPanel = (
+    <CsvDatasetPanel
+      dataset={dataset}
+      profile={datasetProfile}
+      maxBytes={maxUploadBytes}
+      uploadProgress={uploadProgress}
+      busy={datasetBusy}
+      error={datasetError}
+      compact={Boolean(detail?.messages.length)}
+      onChoose={() => fileInputRef.current?.click()}
+      onFile={(file) => void uploadCsv(file)}
+      onSuggestion={setDraft}
+    />
+  );
   return (
     <main className="conversation-workspace">
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".csv,text/csv,application/csv,text/plain"
+        className="sr-only"
+        tabIndex={-1}
+        onChange={(event) => {
+          const input = event.currentTarget;
+          const file = input.files?.item(0);
+          input.value = "";
+          if (file) void uploadCsv(file);
+        }}
+      />
       <ConversationSidebar
         conversations={conversations}
         selectedId={initialConversationId}
@@ -388,7 +605,9 @@ export function ConversationWorkspace({
             <div className="conversation-header-meta">
               <span>
                 <Database size={13} />
-                No dataset
+                {dataset
+                  ? `${dataset.name} · ${datasetStatusLabel(dataset.activeVersion?.status)}`
+                  : "No dataset"}
               </span>
               {archived ? <span>Archived</span> : null}
             </div>
@@ -472,7 +691,7 @@ export function ConversationWorkspace({
             loading={detailLoading}
             streamedText={streamedText}
             run={run}
-            onSuggestion={setDraft}
+            datasetPanel={datasetPanel}
           />
         </div>
         <PromptComposer
@@ -483,6 +702,11 @@ export function ConversationWorkspace({
           disabled={detailLoading || archived || actionBusy}
           submitting={submitting}
           providerReady={providerReady}
+          datasetReady={datasetReady}
+          attachmentDisabled={
+            detailLoading || archived || actionBusy || datasetBusy || Boolean(run)
+          }
+          onAttach={() => fileInputRef.current?.click()}
           run={run}
         />
       </section>
@@ -573,4 +797,29 @@ function uniqueConversations(values: readonly ConversationSummaryContract[]) {
   return [
     ...new Map(values.map((conversation) => [conversation.id, conversation])).values()
   ];
+}
+
+function datasetStatusLabel(status: string | undefined): string {
+  switch (status) {
+    case "ready":
+      return "Ready";
+    case "failed":
+      return "Needs attention";
+    case "validating":
+      return "Validating";
+    case "profiling":
+      return "Profiling";
+    case "indexing":
+      return "Saving profile";
+    case "queued":
+    case "uploaded":
+      return "Queued";
+    default:
+      return "Uploading";
+  }
+}
+
+function formatBytes(value: number): string {
+  if (value >= 1024 ** 2) return `${Math.round(value / 1024 ** 2)} MB`;
+  return `${Math.round(value / 1024)} KB`;
 }

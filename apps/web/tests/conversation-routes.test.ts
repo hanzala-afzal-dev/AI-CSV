@@ -12,6 +12,8 @@ const state = vi.hoisted(() => {
     userId,
     title: "Revenue questions",
     status: "active" as const,
+    activeDatasetId: null,
+    activeDatasetVersionId: null,
     lastMessageSequence: 0,
     lastActivityAt: now,
     version: 1,
@@ -35,6 +37,7 @@ const state = vi.hoisted(() => {
       list: vi.fn(),
       getDetail: vi.fn(),
       rename: vi.fn(),
+      setActiveDataset: vi.fn(),
       setArchived: vi.fn(),
       delete: vi.fn(),
       submitMessage: vi.fn(),
@@ -104,7 +107,10 @@ vi.mock("../src/server/runtime", () => ({
 }));
 
 import { POST as createConversationRoute } from "../src/app/api/v1/conversations/route";
-import { GET as getConversationRoute } from "../src/app/api/v1/conversations/[conversationId]/route";
+import {
+  GET as getConversationRoute,
+  PATCH as updateConversationRoute
+} from "../src/app/api/v1/conversations/[conversationId]/route";
 import { POST as submitMessageRoute } from "../src/app/api/v1/conversations/[conversationId]/messages/route";
 import { GET as streamEventsRoute } from "../src/app/api/v1/conversations/[conversationId]/runs/[runId]/events/route";
 
@@ -130,6 +136,11 @@ describe("conversation routes", () => {
       conversation: state.conversation,
       messages: [],
       activeRun: null
+    });
+    state.conversationService.setActiveDataset.mockReset().mockResolvedValue({
+      ...state.conversation,
+      activeDatasetId: "88888888-8888-4888-8888-888888888888",
+      activeDatasetVersionId: "99999999-9999-4999-8999-999999999999"
     });
     state.conversationService.submitMessage.mockReset().mockResolvedValue({
       messageId: state.messageId,
@@ -183,6 +194,37 @@ describe("conversation routes", () => {
     await expect(response.json()).resolves.toMatchObject({
       error: { code: "CONVERSATION_NOT_FOUND", message: "Conversation not found." }
     });
+  });
+
+  it("attaches only a session-owned dataset version using a strict request", async () => {
+    const versionId = "99999999-9999-4999-8999-999999999999";
+    const response = await updateConversationRoute(
+      mutationRequest(`/conversations/${state.conversationId}`, {
+        activeDatasetVersionId: versionId
+      }),
+      { params: Promise.resolve({ conversationId: state.conversationId }) }
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(state.conversationService.setActiveDataset).toHaveBeenCalledWith({
+      userId: state.userId,
+      conversationId: state.conversationId,
+      datasetVersionId: versionId
+    });
+    expect(body.data.conversation.activeDataset).toEqual({
+      datasetId: "88888888-8888-4888-8888-888888888888",
+      datasetVersionId: versionId
+    });
+
+    const massAssigned = await updateConversationRoute(
+      mutationRequest(`/conversations/${state.conversationId}`, {
+        activeDatasetVersionId: versionId,
+        activeDatasetId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+      }),
+      { params: Promise.resolve({ conversationId: state.conversationId }) }
+    );
+    expect(massAssigned.status).toBe(422);
   });
 
   it("requires CSRF and a dedicated submission rate limit", async () => {

@@ -38,6 +38,8 @@ export interface ConversationProps {
   readonly userId: string;
   readonly title: string;
   readonly status: ConversationStatus;
+  readonly activeDatasetId: string | null;
+  readonly activeDatasetVersionId: string | null;
   readonly lastMessageSequence: number;
   readonly lastActivityAt: Date;
   readonly version: number;
@@ -64,6 +66,8 @@ export class Conversation extends AggregateRoot {
       userId: requireNonBlank(input.userId),
       title: normalizeConversationTitle(input.title ?? Conversation.defaultTitle),
       status: "active",
+      activeDatasetId: null,
+      activeDatasetVersionId: null,
       lastMessageSequence: 0,
       lastActivityAt: now,
       version: 1,
@@ -92,6 +96,12 @@ export class Conversation extends AggregateRoot {
       throw new DomainError(
         "CONVERSATION_STATUS_TRANSITION_INVALID",
         "Conversation version is invalid."
+      );
+    }
+    if ((props.activeDatasetId === null) !== (props.activeDatasetVersionId === null)) {
+      throw new DomainError(
+        "CONVERSATION_STATUS_TRANSITION_INVALID",
+        "Conversation dataset references must be set together."
       );
     }
     return new Conversation({

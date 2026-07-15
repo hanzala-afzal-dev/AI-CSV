@@ -295,6 +295,8 @@ export const conversations = pgTable(
       .references(() => users.id, { onDelete: "cascade" }),
     title: varchar("title", { length: 120 }).notNull(),
     status: conversationStatusEnum("status").notNull().default("active"),
+    activeDatasetId: uuid("active_dataset_id"),
+    activeDatasetVersionId: uuid("active_dataset_version_id"),
     lastMessageSequence: integer("last_message_sequence").notNull().default(0),
     lastActivityAt: timestamp("last_activity_at", { withTimezone: true })
       .notNull()
@@ -316,7 +318,26 @@ export const conversations = pgTable(
       sql`char_length(btrim(${table.title})) between 1 and 120 and ${table.title} = btrim(${table.title})`
     ),
     check("conversations_sequence_check", sql`${table.lastMessageSequence} >= 0`),
-    check("conversations_version_check", sql`${table.version} > 0`)
+    check("conversations_version_check", sql`${table.version} > 0`),
+    check(
+      "conversations_active_dataset_check",
+      sql`(${table.activeDatasetId} is null and ${table.activeDatasetVersionId} is null)
+        or (${table.activeDatasetId} is not null and ${table.activeDatasetVersionId} is not null)`
+    ),
+    foreignKey({
+      name: "conversations_active_dataset_fk",
+      columns: [table.userId, table.activeDatasetId],
+      foreignColumns: [datasets.userId, datasets.id]
+    }),
+    foreignKey({
+      name: "conversations_active_dataset_version_fk",
+      columns: [table.userId, table.activeDatasetId, table.activeDatasetVersionId],
+      foreignColumns: [
+        datasetVersions.userId,
+        datasetVersions.datasetId,
+        datasetVersions.id
+      ]
+    })
   ]
 );
 
@@ -478,7 +499,8 @@ export const datasetStatusEnum = pgEnum("dataset_status", [
   "uploaded",
   "profiling",
   "ready",
-  "failed"
+  "failed",
+  "deleting"
 ]);
 
 export const datasetVersionStatusEnum = pgEnum("dataset_version_status", [
@@ -515,6 +537,7 @@ export const datasets = pgTable(
     rowCount: integer("row_count"),
     columnCount: integer("column_count"),
     failureReason: text("failure_reason"),
+    activeVersionId: uuid("active_version_id"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
     deletedAt: timestamp("deleted_at", { withTimezone: true })
@@ -608,6 +631,9 @@ export const datasetVersions = pgTable(
     schemaProfile: jsonb("schema_profile"),
     statisticalProfile: jsonb("statistical_profile"),
     active: boolean("active").notNull().default(true),
+    ingestionClaimId: varchar("ingestion_claim_id", { length: 128 }),
+    ingestionClaimedAt: timestamp("ingestion_claimed_at", { withTimezone: true }),
+    ingestionAttempt: integer("ingestion_attempt").notNull().default(0),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
     deletedAt: timestamp("deleted_at", { withTimezone: true })
@@ -617,8 +643,119 @@ export const datasetVersions = pgTable(
       table.datasetId,
       table.versionNumber
     ),
+    uniqueIndex("dataset_versions_user_dataset_id_unique").on(
+      table.userId,
+      table.datasetId,
+      table.id
+    ),
     index("dataset_versions_user_status_idx").on(table.userId, table.status),
-    index("dataset_versions_dataset_active_idx").on(table.datasetId, table.active)
+    index("dataset_versions_dataset_active_idx").on(table.datasetId, table.active),
+    check(
+      "dataset_versions_counts_check",
+      sql`(${table.rowCount} is null or ${table.rowCount} >= 0)
+        and (${table.columnCount} is null or ${table.columnCount} > 0)
+        and (${table.profileVersion} is null or ${table.profileVersion} > 0)
+        and ${table.ingestionAttempt} >= 0`
+    ),
+    check(
+      "dataset_versions_claim_check",
+      sql`(${table.ingestionClaimId} is null and ${table.ingestionClaimedAt} is null)
+        or (${table.ingestionClaimId} is not null and ${table.ingestionClaimedAt} is not null)`
+    )
+  ]
+);
+
+export const datasetColumns = pgTable(
+  "dataset_columns",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    datasetId: uuid("dataset_id").notNull(),
+    datasetVersionId: uuid("dataset_version_id").notNull(),
+    ordinal: integer("ordinal").notNull(),
+    originalName: varchar("original_name", { length: 500 }).notNull(),
+    canonicalName: varchar("canonical_name", { length: 160 }).notNull(),
+    inferredType: varchar("inferred_type", { length: 32 }).notNull(),
+    semanticType: varchar("semantic_type", { length: 32 }).notNull(),
+    nullable: boolean("nullable").notNull(),
+    statistics: jsonb("statistics").notNull(),
+    description: text("description"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
+  },
+  (table) => [
+    uniqueIndex("dataset_columns_version_ordinal_unique").on(
+      table.datasetVersionId,
+      table.ordinal
+    ),
+    uniqueIndex("dataset_columns_version_canonical_unique").on(
+      table.datasetVersionId,
+      table.canonicalName
+    ),
+    index("dataset_columns_user_version_idx").on(table.userId, table.datasetVersionId),
+    foreignKey({
+      name: "dataset_columns_user_dataset_version_fk",
+      columns: [table.userId, table.datasetId, table.datasetVersionId],
+      foreignColumns: [
+        datasetVersions.userId,
+        datasetVersions.datasetId,
+        datasetVersions.id
+      ]
+    }).onDelete("cascade"),
+    check("dataset_columns_ordinal_check", sql`${table.ordinal} >= 0`),
+    check(
+      "dataset_columns_inferred_type_check",
+      sql`${table.inferredType} in ('integer', 'decimal', 'boolean', 'date', 'timestamp', 'text')`
+    ),
+    check(
+      "dataset_columns_semantic_type_check",
+      sql`${table.semanticType} in ('identifier', 'numeric', 'date', 'categorical', 'free_text')`
+    ),
+    check(
+      "dataset_columns_statistics_check",
+      sql`jsonb_typeof(${table.statistics}) = 'object' and ${table.statistics}->>'version' = '1'`
+    )
+  ]
+);
+
+export const datasetProfiles = pgTable(
+  "dataset_profiles",
+  {
+    datasetVersionId: uuid("dataset_version_id").primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    datasetId: uuid("dataset_id").notNull(),
+    profile: jsonb("profile").notNull(),
+    warnings: jsonb("warnings").notNull(),
+    suggestedPrompts: jsonb("suggested_prompts").notNull(),
+    generatedAt: timestamp("generated_at", { withTimezone: true }).notNull()
+  },
+  (table) => [
+    index("dataset_profiles_user_dataset_idx").on(table.userId, table.datasetId),
+    foreignKey({
+      name: "dataset_profiles_user_dataset_version_fk",
+      columns: [table.userId, table.datasetId, table.datasetVersionId],
+      foreignColumns: [
+        datasetVersions.userId,
+        datasetVersions.datasetId,
+        datasetVersions.id
+      ]
+    }).onDelete("cascade"),
+    check(
+      "dataset_profiles_profile_check",
+      sql`jsonb_typeof(${table.profile}) = 'object' and ${table.profile}->>'version' = '1'`
+    ),
+    check(
+      "dataset_profiles_warnings_check",
+      sql`jsonb_typeof(${table.warnings}) = 'array'`
+    ),
+    check(
+      "dataset_profiles_suggestions_check",
+      sql`jsonb_typeof(${table.suggestedPrompts}) = 'array'
+        and jsonb_array_length(${table.suggestedPrompts}) between 3 and 6`
+    )
   ]
 );
 

@@ -37,4 +37,5 @@ export interface ObjectStorage {
   }): string;
   createPresignedUpload(request: PresignedUploadRequest): Promise<PresignedUpload>;
   inspectObject(objectKey: string): Promise<StoredObjectMetadata>;
+  readObject(objectKey: string): Promise<AsyncIterable<Uint8Array>>;
 }

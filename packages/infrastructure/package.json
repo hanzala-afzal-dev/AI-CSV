@@ -16,6 +16,10 @@
       "types": "./dist/src/auth/api-key.d.ts",
       "import": "./dist/src/auth/api-key.js"
     },
+    "./analytics": {
+      "types": "./dist/src/analytics/index.d.ts",
+      "import": "./dist/src/analytics/index.js"
+    },
     "./identity": {
       "types": "./dist/src/auth/index.d.ts",
       "import": "./dist/src/auth/index.js"
@@ -62,8 +66,8 @@
     }
   },
   "scripts": {
-    "build": "tsup src/index.ts src/auth/api-key.ts src/auth/index.ts src/auth/identity-mailer.ts src/auth/identity-repository.ts src/auth/password-hasher.ts src/auth/secure-token.ts src/config/env.ts src/database/client.ts src/database/unit-of-work.ts src/health/readiness.ts src/logging/logger.ts src/queue/queues.ts src/queue/outbox-dispatcher.ts src/rate-limit/rate-limiter.ts src/redis/client.ts src/storage/s3-object-storage.ts src/vector/qdrant.ts drizzle/schema.ts --format esm --dts --clean",
-    "dev": "tsup src/index.ts src/auth/api-key.ts src/auth/index.ts src/auth/identity-mailer.ts src/auth/identity-repository.ts src/auth/password-hasher.ts src/auth/secure-token.ts src/config/env.ts src/database/client.ts src/database/unit-of-work.ts src/health/readiness.ts src/logging/logger.ts src/queue/queues.ts src/queue/outbox-dispatcher.ts src/rate-limit/rate-limiter.ts src/redis/client.ts src/storage/s3-object-storage.ts src/vector/qdrant.ts drizzle/schema.ts --format esm --dts --watch",
+    "build": "tsup src/index.ts src/analytics/index.ts src/auth/api-key.ts src/auth/index.ts src/auth/identity-mailer.ts src/auth/identity-repository.ts src/auth/password-hasher.ts src/auth/secure-token.ts src/config/env.ts src/database/client.ts src/database/unit-of-work.ts src/health/readiness.ts src/logging/logger.ts src/queue/queues.ts src/queue/outbox-dispatcher.ts src/rate-limit/rate-limiter.ts src/redis/client.ts src/storage/s3-object-storage.ts src/vector/qdrant.ts drizzle/schema.ts --format esm --dts --clean",
+    "dev": "tsup src/index.ts src/analytics/index.ts src/auth/api-key.ts src/auth/index.ts src/auth/identity-mailer.ts src/auth/identity-repository.ts src/auth/password-hasher.ts src/auth/secure-token.ts src/config/env.ts src/database/client.ts src/database/unit-of-work.ts src/health/readiness.ts src/logging/logger.ts src/queue/queues.ts src/queue/outbox-dispatcher.ts src/rate-limit/rate-limiter.ts src/redis/client.ts src/storage/s3-object-storage.ts src/vector/qdrant.ts drizzle/schema.ts --format esm --dts --watch",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run tests/*.test.ts --passWithNoTests",

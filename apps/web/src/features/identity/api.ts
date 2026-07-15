@@ -24,7 +24,8 @@ export async function publicMutation<T>(path: string, body: unknown): Promise<T>
 export async function authenticatedMutation<T>(
   path: string,
   method: "POST" | "PUT" | "PATCH" | "DELETE",
-  body?: unknown
+  body?: unknown,
+  additionalHeaders: Readonly<Record<string, string>> = {}
 ): Promise<T> {
   const csrf = await request<{ data: { csrfToken: string } }>("/api/v1/auth/csrf", {
     method: "GET"
@@ -32,7 +33,7 @@ export async function authenticatedMutation<T>(
   return request<T>(path, {
     method,
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-    headers: jsonHeaders(csrf.data.csrfToken)
+    headers: { ...jsonHeaders(csrf.data.csrfToken), ...additionalHeaders }
   });
 }
 
@@ -54,7 +55,7 @@ async function request<T>(path: string, init: RequestInit): Promise<T> {
   return (await response.json()) as T;
 }
 
-function jsonHeaders(csrfToken?: string): HeadersInit {
+function jsonHeaders(csrfToken?: string): Record<string, string> {
   return {
     "content-type": "application/json",
     ...(csrfToken ? { "x-csrf-token": csrfToken } : {})

@@ -1,16 +1,21 @@
 import { Worker } from "bullmq";
 import { ConversationRunService } from "@agentic-csv/application";
+import { DatasetIngestionService } from "@agentic-csv/application";
 import {
   createBullMqConnectionOptions,
   createDatabaseClient,
+  createS3Client,
   createLogger,
   createPgPool,
   DeterministicConversationResponder,
   loadEnv,
   OutboxDispatcher,
+  PostgresDatasetRepository,
   PostgresConversationRepository,
+  S3ObjectStorage,
   queueNames
 } from "@agentic-csv/infrastructure";
+import { DuckDbCsvProfiler } from "@agentic-csv/infrastructure/analytics";
 import { processAgentRunJob } from "./processors/agent-run.processor";
 import { processDatasetIngestionJob } from "./processors/dataset-ingestion.processor";
 
@@ -19,15 +24,31 @@ const logger = createLogger(env).child({ serviceProcess: "worker" });
 const pool = createPgPool(env);
 const database = createDatabaseClient(pool);
 const outboxDispatcher = new OutboxDispatcher(database, env, logger);
+const datasetRepository = new PostgresDatasetRepository(database);
+const objectStorage = new S3ObjectStorage(createS3Client(env), env.S3_BUCKET);
+const datasetIngestionService = new DatasetIngestionService(
+  datasetRepository,
+  objectStorage,
+  new DuckDbCsvProfiler({
+    maxBytes: env.UPLOAD_MAX_BYTES,
+    maxRows: env.CSV_MAX_ROWS,
+    maxColumns: env.CSV_MAX_COLUMNS,
+    maxFieldCharacters: env.CSV_MAX_FIELD_CHARACTERS,
+    maxMalformedRowRatio: env.CSV_MAX_MALFORMED_ROW_RATIO,
+    timeoutMs: env.CSV_PROFILE_TIMEOUT_MS,
+    memoryLimitMb: env.DUCKDB_MEMORY_LIMIT_MB
+  }),
+  env.INGESTION_CLAIM_TTL_SECONDS
+);
 const conversationRunService = new ConversationRunService(
   new PostgresConversationRepository(database),
-  new DeterministicConversationResponder()
+  new DeterministicConversationResponder(datasetRepository)
 );
 let dispatchRunning = false;
 
 const datasetWorker = new Worker(
   queueNames.datasetIngestion,
-  async (job) => processDatasetIngestionJob(job, logger),
+  async (job) => processDatasetIngestionJob(job, datasetIngestionService, logger),
   {
     connection: createBullMqConnectionOptions(env.REDIS_URL),
     concurrency: env.WORKER_CONCURRENCY,

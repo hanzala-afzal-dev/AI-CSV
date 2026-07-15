@@ -71,6 +71,11 @@ export interface ConversationSubmission {
   readonly replayed: boolean;
 }
 
+export type ConversationDatasetAttachmentResult =
+  | { readonly state: "attached"; readonly conversation: ConversationProps }
+  | { readonly state: "conversation_not_found" }
+  | { readonly state: "dataset_version_not_found" };
+
 export interface ConversationRunWork {
   readonly userId: string;
   readonly conversationId: string;
@@ -99,6 +104,12 @@ export interface ConversationRepository {
     readonly conversation: ConversationProps;
     readonly expectedVersion: number;
   }): Promise<ConversationProps | null>;
+  attachDatasetVersion(input: {
+    readonly userId: string;
+    readonly conversationId: string;
+    readonly datasetVersionId: string | null;
+    readonly occurredAt: Date;
+  }): Promise<ConversationDatasetAttachmentResult>;
   delete(userId: string, conversationId: string): Promise<boolean>;
   enqueueMessage(input: {
     readonly userId: string;

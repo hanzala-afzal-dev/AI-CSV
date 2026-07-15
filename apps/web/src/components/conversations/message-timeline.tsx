@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-import { Database, MessageSquareText, Sparkles, UserRound } from "lucide-react";
+import { useEffect, useRef, type ReactNode } from "react";
+import { MessageSquareText, Sparkles, UserRound } from "lucide-react";
 import type {
   AgentRunSummaryContract,
   ConversationDetailContract,
@@ -14,13 +14,13 @@ export function MessageTimeline({
   loading,
   streamedText,
   run,
-  onSuggestion
+  datasetPanel
 }: {
   readonly detail: ConversationDetailContract | null;
   readonly loading: boolean;
   readonly streamedText: string;
   readonly run: AgentRunSummaryContract | null;
-  readonly onSuggestion: (value: string) => void;
+  readonly datasetPanel: ReactNode;
 }) {
   const endRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -31,33 +31,17 @@ export function MessageTimeline({
   if (!detail || detail.messages.length === 0) {
     return (
       <section className="conversation-empty" aria-labelledby="conversation-empty-title">
-        <span className="conversation-empty-icon">
-          <Database size={24} />
-        </span>
-        <h2 id="conversation-empty-title">
-          {detail ? "Ask your first question" : "Start a conversation"}
+        <h2 id="conversation-empty-title" className="sr-only">
+          CSV dataset
         </h2>
-        <p>Questions and responses will remain available here across sessions.</p>
-        <div className="conversation-suggestions" aria-label="Suggested prompts">
-          <button
-            type="button"
-            onClick={() => onSuggestion("What can this app help me analyze?")}
-          >
-            What can this app help me analyze?
-          </button>
-          <button
-            type="button"
-            onClick={() => onSuggestion("How should I prepare a CSV for analysis?")}
-          >
-            How should I prepare a CSV?
-          </button>
-        </div>
+        {datasetPanel}
       </section>
     );
   }
 
   return (
     <div className="message-timeline">
+      {datasetPanel}
       {detail.messages.map((message) => (
         <MessageItem key={message.id} message={message} />
       ))}
