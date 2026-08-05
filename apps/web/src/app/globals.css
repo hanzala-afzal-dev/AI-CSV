@@ -357,6 +357,185 @@ textarea {
     @apply mt-1.5 block text-xs text-muted;
   }
 
+  .analysis-artifact {
+    @apply mt-4 grid w-full min-w-0 gap-4 rounded-md border border-line bg-canvas/50 p-4;
+  }
+
+  .analysis-artifact-header {
+    @apply flex items-start gap-3;
+  }
+
+  .analysis-artifact-header h3 {
+    @apply text-sm font-bold text-ink;
+  }
+
+  .analysis-artifact-header p {
+    @apply mt-0.5 text-xs leading-5 text-muted;
+  }
+
+  .analysis-artifact-icon {
+    @apply grid size-9 shrink-0 place-items-center rounded-md border border-line bg-panel text-action;
+  }
+
+  .analysis-artifact-error {
+    @apply mt-4 flex items-center justify-between gap-3;
+  }
+
+  .analysis-empty-state {
+    @apply flex min-h-24 items-center justify-center gap-2 rounded-md border border-dashed border-line text-sm text-muted;
+  }
+
+  .analysis-truncation {
+    @apply rounded-md border border-warning/30 bg-warning-soft px-3 py-2 text-xs text-warning-strong;
+  }
+
+  .analysis-bar-chart {
+    @apply grid gap-2;
+  }
+
+  .analysis-bar-row {
+    @apply grid min-w-0 grid-cols-[minmax(72px,0.7fr)_minmax(120px,2fr)_auto] items-center gap-3 text-xs;
+  }
+
+  .analysis-bar-row > span {
+    @apply truncate text-muted;
+  }
+
+  .analysis-bar-row > div {
+    @apply h-5 overflow-hidden rounded bg-subtle;
+  }
+
+  .analysis-bar-row i {
+    @apply block h-full rounded bg-action;
+  }
+
+  .analysis-bar-row strong {
+    @apply min-w-12 text-right font-bold text-ink;
+  }
+
+  .analysis-line-chart {
+    @apply min-w-0 overflow-hidden rounded-md border border-line bg-panel p-3;
+  }
+
+  .analysis-line-chart svg {
+    @apply h-56 w-full;
+  }
+
+  .analysis-line-chart line {
+    stroke: var(--color-line);
+    stroke-width: 1.5;
+  }
+
+  .analysis-line-chart polyline {
+    fill: none;
+    stroke: var(--color-action);
+    stroke-width: 3;
+    vector-effect: non-scaling-stroke;
+  }
+
+  .analysis-line-chart circle {
+    fill: var(--color-panel);
+    stroke: var(--color-action);
+    stroke-width: 2;
+    vector-effect: non-scaling-stroke;
+  }
+
+  .analysis-axis-labels {
+    @apply grid grid-cols-3 gap-2 text-xs text-muted;
+  }
+
+  .analysis-axis-labels span:nth-child(2) {
+    @apply text-center;
+  }
+
+  .analysis-axis-labels span:last-child {
+    @apply text-right;
+  }
+
+  .analysis-pie-layout {
+    @apply grid items-center gap-5 sm:grid-cols-[180px_minmax(0,1fr)];
+  }
+
+  .analysis-pie {
+    @apply mx-auto aspect-square w-full max-w-44 rounded-full border-8 border-panel shadow-sm;
+  }
+
+  .analysis-legend {
+    @apply grid gap-2;
+  }
+
+  .analysis-legend li {
+    @apply grid grid-cols-[12px_minmax(0,1fr)_auto] items-center gap-2 text-xs;
+  }
+
+  .analysis-legend i {
+    @apply size-3 rounded-sm;
+  }
+
+  .analysis-legend span {
+    @apply truncate text-muted;
+  }
+
+  .analysis-legend strong {
+    @apply font-bold text-ink;
+  }
+
+  .analysis-table-scroll {
+    @apply max-w-full overflow-x-auto rounded-md border border-line bg-panel;
+  }
+
+  .analysis-table {
+    @apply w-full min-w-max border-collapse text-left text-xs;
+  }
+
+  .analysis-table th {
+    @apply border-b border-line bg-subtle px-3 py-2 font-bold text-ink;
+  }
+
+  .analysis-table td {
+    @apply max-w-64 border-b border-line px-3 py-2 text-muted last:border-b-0;
+  }
+
+  .analysis-disclosure {
+    @apply border-t border-line pt-3 text-xs;
+  }
+
+  .analysis-disclosure summary {
+    @apply cursor-pointer font-semibold text-muted outline-none hover:text-ink focus-visible:ring-2 focus-visible:ring-focus;
+  }
+
+  .analysis-disclosure[open] {
+    @apply grid gap-3;
+  }
+
+  .analysis-provenance {
+    @apply grid gap-2 sm:grid-cols-2;
+  }
+
+  .analysis-provenance > div {
+    @apply grid grid-cols-[110px_minmax(0,1fr)] gap-2;
+  }
+
+  .analysis-provenance dt {
+    @apply text-muted;
+  }
+
+  .analysis-provenance dd {
+    @apply break-words font-semibold text-ink;
+  }
+
+  .analysis-notes {
+    @apply rounded-md bg-subtle px-3 py-2 text-muted;
+  }
+
+  .analysis-notes ul {
+    @apply mt-1 list-disc pl-4;
+  }
+
+  .analysis-notes-warning {
+    @apply border border-warning/30 bg-warning-soft text-warning-strong;
+  }
+
   .message-system-event {
     @apply mx-auto flex max-w-xl items-center justify-center gap-2 rounded-md bg-subtle px-3 py-2 text-xs font-medium text-muted;
   }

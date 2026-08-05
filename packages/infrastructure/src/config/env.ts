@@ -123,6 +123,17 @@ export const envSchema = z
       60_000
     ),
     DUCKDB_MEMORY_LIMIT_MB: integerFromString(z.number().min(64).max(4096)).default(512),
+    ANALYSIS_MAX_SCAN_BYTES: integerFromString(
+      z.number().min(1).max(1_073_741_824)
+    ).default(104_857_600),
+    ANALYSIS_QUERY_TIMEOUT_MS: integerFromString(
+      z.number().min(100).max(300_000)
+    ).default(30_000),
+    ANALYSIS_MAX_RESULT_ROWS: integerFromString(z.number().min(1).max(500)).default(200),
+    ANALYSIS_MAX_RESULT_BYTES: integerFromString(
+      z.number().min(1_024).max(2_097_152)
+    ).default(1_048_576),
+    ANALYSIS_DUCKDB_THREADS: integerFromString(z.number().min(1).max(4)).default(1),
     INGESTION_CLAIM_TTL_SECONDS: integerFromString(z.number().min(30).max(3600)).default(
       300
     ),

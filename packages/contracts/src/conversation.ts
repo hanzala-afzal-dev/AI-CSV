@@ -64,10 +64,18 @@ export const statusMessagePartSchema = z
 export const warningMessagePartSchema = z
   .object({ type: z.literal("warning"), text: z.string().min(1).max(1_000) })
   .strict();
+export const analysisMessagePartSchema = z
+  .object({
+    type: z.literal("analysis"),
+    resultId: z.string().uuid(),
+    chartArtifactId: z.string().uuid()
+  })
+  .strict();
 export const conversationMessagePartSchema = z.discriminatedUnion("type", [
   textMessagePartSchema,
   statusMessagePartSchema,
-  warningMessagePartSchema
+  warningMessagePartSchema,
+  analysisMessagePartSchema
 ]);
 export const conversationMessageContentSchema = z
   .object({

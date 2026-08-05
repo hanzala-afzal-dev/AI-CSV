@@ -122,6 +122,16 @@ plus upload-specific Redis buckets delivered in Phase 5.
 
 ## 6. Submit-message contract
 
+Analytical message parts reference immutable server-side artifacts by result and chart ID. The browser
+loads the stored bundle through:
+
+- `GET /api/v1/analysis/results/:resultId`
+
+The endpoint derives ownership from the browser session, returns the same `ANALYSIS_RESULT_NOT_FOUND`
+response for absent and foreign IDs, and returns only the bounded result schema/rows, provenance and
+validated chart specification. It never returns tenant IDs, object keys, filesystem paths or executable
+query text.
+
 ```ts
 type SubmitMessageRequest = {
   clientRequestId: string;

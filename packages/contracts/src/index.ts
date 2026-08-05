@@ -1,6 +1,38 @@
 export { apiErrorEnvelopeSchema, apiErrorSchema, apiSuccessEnvelopeSchema } from "./api";
 export type { ApiError, ApiErrorEnvelope } from "./api";
 export {
+  analysisAggregationSchema,
+  analysisArtifactBundleSchema,
+  analysisColumnRefSchema,
+  analysisFilterSchema,
+  analysisMeasureSchema,
+  analysisOperationSchema,
+  analysisPlanSchema,
+  analysisProvenanceSchema,
+  analysisResultArtifactSchema,
+  analysisResultResponseSchema,
+  analysisResultRowSchema,
+  analysisResultValueSchema,
+  analysisSortSchema,
+  chartArtifactSchema,
+  chartFieldsMatchResult,
+  chartSpecSchema,
+  resultColumnSchema
+} from "./analysis";
+export type {
+  AnalysisAggregationContract,
+  AnalysisArtifactBundleContract,
+  AnalysisFilterContract,
+  AnalysisOperationContract,
+  AnalysisPlanContract,
+  AnalysisProvenanceContract,
+  AnalysisResultArtifactContract,
+  AnalysisResultRowContract,
+  ChartArtifactContract,
+  ChartSpecContract,
+  ResultColumnContract
+} from "./analysis";
+export {
   completeDatasetUploadRequestSchema,
   createDatasetRequestSchema,
   datasetColumnProfileSchema,
@@ -95,6 +127,7 @@ export {
 export type { LoginRequest, RegisterRequest, SafeUser } from "./identity";
 export {
   agentRunStatusSchema,
+  analysisMessagePartSchema,
   agentRunSummarySchema,
   archiveConversationRequestSchema,
   assistantDeltaEventSchema,

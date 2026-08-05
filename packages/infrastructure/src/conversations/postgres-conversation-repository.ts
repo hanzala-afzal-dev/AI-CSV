@@ -20,6 +20,9 @@ import {
 } from "@agentic-csv/domain";
 import {
   agentRuns,
+  analysisPlans,
+  analysisResults,
+  chartArtifacts,
   conversationMessages,
   conversations,
   datasetVersions,
@@ -452,10 +455,55 @@ export class PostgresConversationRepository implements ConversationRepository {
         sequence: messageSequence,
         role: "assistant",
         status: "final",
-        contentParts: textContent(input.assistantText),
+        contentParts: input.analysis
+          ? analysisContent(input.assistantText, input.analysis)
+          : textContent(input.assistantText),
         createdAt: input.occurredAt,
         finalizedAt: input.occurredAt
       });
+      if (input.analysis) {
+        await transaction.insert(analysisPlans).values({
+          id: input.analysis.planId,
+          userId: input.userId,
+          conversationId: input.conversationId,
+          runId: input.runId,
+          datasetId: input.analysis.datasetId,
+          datasetVersionId: input.analysis.datasetVersionId,
+          plan: input.analysis.plan,
+          planHash: input.analysis.planHash,
+          validationStatus: "validated",
+          createdAt: input.analysis.createdAt
+        });
+        await transaction.insert(analysisResults).values({
+          id: input.analysis.resultId,
+          userId: input.userId,
+          conversationId: input.conversationId,
+          runId: input.runId,
+          datasetId: input.analysis.datasetId,
+          datasetVersionId: input.analysis.datasetVersionId,
+          planId: input.analysis.planId,
+          planHash: input.analysis.planHash,
+          resultSchema: input.analysis.schema,
+          rows: input.analysis.rows,
+          rowCount: input.analysis.rowCount,
+          truncated: input.analysis.truncated,
+          executionMs: input.analysis.executionMs,
+          checksum: input.analysis.checksum,
+          provenance: input.analysis.provenance,
+          createdAt: input.analysis.createdAt
+        });
+        await transaction.insert(chartArtifacts).values({
+          id: input.analysis.chartArtifactId,
+          userId: input.userId,
+          conversationId: input.conversationId,
+          runId: input.runId,
+          messageId: input.assistantMessageId,
+          resultArtifactId: input.analysis.resultId,
+          chartSpec: input.analysis.chartSpec,
+          schemaVersion: 1,
+          createdAt: input.analysis.createdAt
+        });
+      }
       await transaction
         .update(agentRuns)
         .set({
@@ -738,6 +786,23 @@ function mapEvent(row: EventRow): RunEventView {
 
 function textContent(text: string) {
   return { version: 1 as const, parts: [{ type: "text" as const, text }] };
+}
+
+function analysisContent(
+  text: string,
+  analysis: NonNullable<Parameters<ConversationRepository["completeRun"]>[0]["analysis"]>
+) {
+  return {
+    version: 1 as const,
+    parts: [
+      { type: "text" as const, text },
+      {
+        type: "analysis" as const,
+        resultId: analysis.resultId,
+        chartArtifactId: analysis.chartArtifactId
+      }
+    ]
+  };
 }
 
 function extractText(value: unknown): string {

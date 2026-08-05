@@ -59,3 +59,4 @@ export {
   PostgresConversationRepository
 } from "./conversations";
 export { PostgresDatasetRepository } from "./datasets";
+export { PostgresAnalysisRepository } from "./analytics/postgres-analysis-repository";

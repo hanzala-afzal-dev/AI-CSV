@@ -1,4 +1,11 @@
-import type { ConversationMessageContent } from "@agentic-csv/contracts";
+import type {
+  AnalysisPlanContract,
+  AnalysisProvenanceContract,
+  AnalysisResultRowContract,
+  ChartSpecContract,
+  ConversationMessageContent,
+  ResultColumnContract
+} from "@agentic-csv/contracts";
 import type {
   AgentRunStatus,
   ConversationProps,
@@ -41,6 +48,25 @@ export interface ConversationDetailView {
   readonly conversation: ConversationProps;
   readonly messages: readonly ConversationMessageView[];
   readonly activeRun: AgentRunView | null;
+}
+
+export interface CompletedAnalysis {
+  readonly planId: string;
+  readonly resultId: string;
+  readonly chartArtifactId: string;
+  readonly datasetId: string;
+  readonly datasetVersionId: string;
+  readonly plan: AnalysisPlanContract;
+  readonly planHash: string;
+  readonly schema: readonly ResultColumnContract[];
+  readonly rows: readonly AnalysisResultRowContract[];
+  readonly rowCount: number;
+  readonly truncated: boolean;
+  readonly executionMs: number;
+  readonly checksum: string;
+  readonly provenance: AnalysisProvenanceContract;
+  readonly chartSpec: ChartSpecContract;
+  readonly createdAt: Date;
 }
 
 export type RunEventType =
@@ -133,6 +159,7 @@ export interface ConversationRepository {
     readonly runId: string;
     readonly assistantMessageId: string;
     readonly assistantText: string;
+    readonly analysis?: CompletedAnalysis;
     readonly generatedTitle: string;
     readonly occurredAt: Date;
   }): Promise<void>;
@@ -165,5 +192,5 @@ export interface ConversationResponder {
     readonly conversationId: string;
     readonly runId: string;
     readonly content: string;
-  }): Promise<{ readonly text: string }>;
+  }): Promise<{ readonly text: string; readonly analysis?: CompletedAnalysis }>;
 }

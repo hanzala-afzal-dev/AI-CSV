@@ -8,6 +8,7 @@ import type {
   ConversationMessageContract
 } from "@agentic-csv/contracts";
 import { Skeleton } from "@/components/ui/skeleton";
+import { AnalysisArtifact } from "@/components/analysis/analysis-artifact";
 
 export function MessageTimeline({
   detail,
@@ -77,9 +78,9 @@ function MessageItem({ message }: { readonly message: ConversationMessageContrac
     return (
       <div className="message-system-event">
         <MessageSquareText size={15} />
-        {message.content.parts.map((part, index) => (
-          <span key={index}>{part.text}</span>
-        ))}
+        {message.content.parts.map((part, index) =>
+          part.type === "analysis" ? null : <span key={index}>{part.text}</span>
+        )}
       </div>
     );
   }
@@ -93,7 +94,13 @@ function MessageItem({ message }: { readonly message: ConversationMessageContrac
       </span>
       <div className="message-body">
         {message.content.parts.map((part, index) =>
-          part.type === "warning" ? (
+          part.type === "analysis" ? (
+            <AnalysisArtifact
+              key={part.resultId}
+              resultId={part.resultId}
+              chartArtifactId={part.chartArtifactId}
+            />
+          ) : part.type === "warning" ? (
             <p key={index} className="message-warning">
               {part.text}
             </p>
