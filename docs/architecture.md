@@ -85,9 +85,11 @@ limit. The global ceiling bounds invalid-key rotation while the credential limit
 AI routes use the separately configured stricter policy. Protection fails closed when Redis cannot
 initialize.
 
-Zod validates external shapes and Drizzle parameterizes relational queries. User input is
-never concatenated into SQL. Future analytical SQL has a separate read-only, allow-listed
-contract defined by the profiling specification.
+Zod validates external shapes and Drizzle parameterizes relational queries. User input is never
+concatenated into SQL. Analytical requests use a separate strict `AnalysisPlan` containing stored column
+IDs, allow-listed operations and typed filter values. The deterministic compiler owns all SQL, quotes
+profiled identifiers and binds values; plans cannot contain SQL, file paths, extensions or arbitrary
+functions.
 
 ## Upload Transaction
 
@@ -104,6 +106,19 @@ DuckDB is embedded in the worker because it is an in-process analytical engine, 
 network database service. The worker can create isolated temporary databases close to
 the CSV processing flow and enforce timeout and result-size controls before returning
 results.
+
+For analysis, the worker reloads the active dataset version under the transaction-local tenant context,
+opens only its server-owned S3 key, and verifies the exact size and SHA-256 while streaming into a random
+`0600` temporary file. DuckDB materializes that one source as the internal `dataset` relation, disables
+external access, and only then executes compiler-generated `SELECT` statements. Query time, memory,
+threads, source bytes, output rows and output bytes are bounded. The temporary directory is removed in a
+`finally` block.
+
+Plans, bounded result rows, checksums, provenance and validated chart specifications are persisted in
+separate append-only tenant tables. Assistant messages hold only typed artifact references. The result API
+revalidates stored chart fields against the result schema and returns an ownership-safe projection without
+object keys, SQL or user IDs. React owns all table and chart rendering; stored data cannot provide JSX or
+executable chart code.
 
 ## Qdrant and PostgreSQL
 

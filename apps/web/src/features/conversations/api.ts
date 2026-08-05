@@ -1,11 +1,13 @@
 import {
   agentRunSummarySchema,
+  analysisResultResponseSchema,
   conversationDetailSchema,
   conversationListSchema,
   conversationSummarySchema,
   providerSettingsSchema,
   submitConversationMessageResponseSchema,
   type AgentRunSummaryContract,
+  type AnalysisArtifactBundleContract,
   type ConversationDetailContract,
   type ConversationListContract,
   type ConversationSummaryContract,
@@ -37,6 +39,15 @@ export async function getConversation(
     `/api/v1/conversations/${conversationId}`
   );
   return conversationDetailSchema.parse(response.data);
+}
+
+export async function getAnalysisResult(
+  resultId: string
+): Promise<AnalysisArtifactBundleContract> {
+  const response = await authenticatedQuery<Envelope<unknown>>(
+    `/api/v1/analysis/results/${resultId}`
+  );
+  return analysisResultResponseSchema.parse(response.data).artifact;
 }
 
 export async function createConversation(): Promise<ConversationSummaryContract> {

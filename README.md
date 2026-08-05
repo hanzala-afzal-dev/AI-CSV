@@ -20,15 +20,17 @@ billing system; users bring their own provider credentials.
 
 ## What Comes Next
 
-Identity, tenant isolation, secure per-user OpenAI settings, the persistent conversation workspace, and
-CSV ingestion are in place. Users can upload directly to isolated object storage, leave while a BullMQ
-worker validates and profiles the file with bounded DuckDB resources, then return to a durable dataset
-summary and schema-based prompt suggestions.
+Identity, tenant isolation, secure per-user OpenAI settings, the persistent conversation workspace, CSV
+ingestion, and deterministic analytics are in place. Users can upload directly to isolated object storage,
+wait for bounded profiling, ask common analytical questions, and reload persisted results, provenance,
+tables, and trusted charts. Calculations use an allow-listed plan compiler and bounded DuckDB execution;
+they do not rely on model-written SQL.
 
-The next product milestone is deterministic analytics and charts: typed analysis plans, an allow-listed
-plan-to-query compiler, bounded read-only DuckDB execution, persisted results and provenance, and trusted
-React chart renderers. Later phases add real agent orchestration with the user's OpenAI key, retrieval and
-memory, then final security and accessibility hardening.
+The next product milestone is stateful LangGraph orchestration using the user's encrypted OpenAI
+credential and selected model. It adds structured planning, material-ambiguity clarification and resume,
+bounded repair, verification, cancellation and replayable progress while keeping deterministic tools in
+control of calculations. Later phases add tenant-filtered retrieval and memory, then final security,
+evaluation and accessibility hardening.
 
 Detailed progress and the authoritative next implementation slice are tracked in
 [`docs/implementation.md`](./docs/implementation.md).

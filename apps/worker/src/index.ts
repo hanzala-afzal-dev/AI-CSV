@@ -1,6 +1,10 @@
 import { Worker } from "bullmq";
-import { ConversationRunService } from "@agentic-csv/application";
-import { DatasetIngestionService } from "@agentic-csv/application";
+import {
+  AnalysisService,
+  ConversationRunService,
+  DatasetIngestionService,
+  DeterministicAnalysisPlanner
+} from "@agentic-csv/application";
 import {
   createBullMqConnectionOptions,
   createDatabaseClient,
@@ -10,12 +14,16 @@ import {
   DeterministicConversationResponder,
   loadEnv,
   OutboxDispatcher,
+  PostgresAnalysisRepository,
   PostgresDatasetRepository,
   PostgresConversationRepository,
   S3ObjectStorage,
   queueNames
 } from "@agentic-csv/infrastructure";
-import { DuckDbCsvProfiler } from "@agentic-csv/infrastructure/analytics";
+import {
+  DuckDbAnalysisEngine,
+  DuckDbCsvProfiler
+} from "@agentic-csv/infrastructure/analytics";
 import { processAgentRunJob } from "./processors/agent-run.processor";
 import { processDatasetIngestionJob } from "./processors/dataset-ingestion.processor";
 
@@ -26,6 +34,7 @@ const database = createDatabaseClient(pool);
 const outboxDispatcher = new OutboxDispatcher(database, env, logger);
 const datasetRepository = new PostgresDatasetRepository(database);
 const objectStorage = new S3ObjectStorage(createS3Client(env), env.S3_BUCKET);
+const analysisRepository = new PostgresAnalysisRepository(database);
 const datasetIngestionService = new DatasetIngestionService(
   datasetRepository,
   objectStorage,
@@ -42,7 +51,22 @@ const datasetIngestionService = new DatasetIngestionService(
 );
 const conversationRunService = new ConversationRunService(
   new PostgresConversationRepository(database),
-  new DeterministicConversationResponder(datasetRepository)
+  new DeterministicConversationResponder(
+    datasetRepository,
+    new AnalysisService(
+      analysisRepository,
+      objectStorage,
+      new DeterministicAnalysisPlanner(),
+      new DuckDbAnalysisEngine({
+        maxScanBytes: env.ANALYSIS_MAX_SCAN_BYTES,
+        maxResultRows: env.ANALYSIS_MAX_RESULT_ROWS,
+        maxResultBytes: env.ANALYSIS_MAX_RESULT_BYTES,
+        timeoutMs: env.ANALYSIS_QUERY_TIMEOUT_MS,
+        memoryLimitMb: env.DUCKDB_MEMORY_LIMIT_MB,
+        threads: env.ANALYSIS_DUCKDB_THREADS
+      })
+    )
+  )
 );
 let dispatchRunning = false;
 

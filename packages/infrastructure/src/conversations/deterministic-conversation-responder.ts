@@ -1,16 +1,22 @@
 import type {
+  AnalysisService,
+  CompletedAnalysis,
   ConversationResponder,
   DatasetReadRepository
 } from "@agentic-csv/application";
 
 export class DeterministicConversationResponder implements ConversationResponder {
-  public constructor(private readonly datasets?: DatasetReadRepository) {}
+  public constructor(
+    private readonly datasets?: DatasetReadRepository,
+    private readonly analysis?: AnalysisService
+  ) {}
 
   public async respond(input: {
     readonly userId: string;
     readonly conversationId: string;
+    readonly runId?: string;
     readonly content: string;
-  }): Promise<{ readonly text: string }> {
+  }): Promise<{ readonly text: string; readonly analysis?: CompletedAnalysis }> {
     const dataset = await this.datasets?.getConversationContext(
       input.userId,
       input.conversationId
@@ -24,6 +30,20 @@ export class DeterministicConversationResponder implements ConversationResponder
       if (dataset.status !== "ready") {
         return {
           text: `${dataset.originalFilename} is still ${humanizeStatus(dataset.status)}. I will use its persisted profile once processing finishes.`
+        };
+      }
+      const analyzed = input.runId
+        ? await this.analysis?.analyze({
+            userId: input.userId,
+            conversationId: input.conversationId,
+            runId: input.runId,
+            question: input.content
+          })
+        : undefined;
+      if (analyzed?.handled) {
+        return {
+          text: analyzed.text,
+          ...(analyzed.analysis ? { analysis: analyzed.analysis } : {})
         };
       }
       const columns = dataset.columnNames.slice(0, 8).join(", ");

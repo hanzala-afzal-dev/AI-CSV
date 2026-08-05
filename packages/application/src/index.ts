@@ -91,6 +91,7 @@ export { ConversationService } from "./conversations/conversation-service";
 export type {
   AgentRunView,
   ConversationCursor,
+  CompletedAnalysis,
   ConversationDatasetAttachmentResult,
   ConversationDetailView,
   ConversationMessageView,
@@ -103,6 +104,21 @@ export type {
   RunEventType,
   RunEventView
 } from "./conversations/ports";
+export { AnalysisError } from "./analysis/analysis-error";
+export type { AnalysisErrorCode } from "./analysis/analysis-error";
+export { AnalysisService } from "./analysis/analysis-service";
+export type { AnalysisServiceResult } from "./analysis/analysis-service";
+export { DeterministicAnalysisPlanner } from "./analysis/deterministic-analysis-planner";
+export type {
+  AnalysisColumnMetadata,
+  AnalysisContextResult,
+  AnalysisEngine,
+  AnalysisExecutionResult,
+  AnalysisPlanner,
+  AnalysisPlanningResult,
+  AnalysisReadRepository,
+  ReadyAnalysisContext
+} from "./analysis/ports";
 export type {
   AiProvider,
   AiProviderGateway,

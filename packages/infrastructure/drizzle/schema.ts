@@ -759,6 +759,181 @@ export const datasetProfiles = pgTable(
   ]
 );
 
+export const analysisPlans = pgTable(
+  "analysis_plans",
+  {
+    id: uuid("id").primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    conversationId: uuid("conversation_id").notNull(),
+    runId: uuid("run_id").notNull(),
+    datasetId: uuid("dataset_id").notNull(),
+    datasetVersionId: uuid("dataset_version_id").notNull(),
+    plan: jsonb("plan").notNull(),
+    planHash: varchar("plan_hash", { length: 64 }).notNull(),
+    validationStatus: varchar("validation_status", { length: 32 }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
+  },
+  (table) => [
+    uniqueIndex("analysis_plans_user_run_unique").on(table.userId, table.runId),
+    uniqueIndex("analysis_plans_user_run_id_unique").on(
+      table.userId,
+      table.runId,
+      table.id
+    ),
+    index("analysis_plans_user_dataset_version_idx").on(
+      table.userId,
+      table.datasetVersionId
+    ),
+    foreignKey({
+      name: "analysis_plans_user_conversation_run_fk",
+      columns: [table.userId, table.conversationId, table.runId],
+      foreignColumns: [agentRuns.userId, agentRuns.conversationId, agentRuns.id]
+    }).onDelete("cascade"),
+    foreignKey({
+      name: "analysis_plans_user_dataset_version_fk",
+      columns: [table.userId, table.datasetId, table.datasetVersionId],
+      foreignColumns: [
+        datasetVersions.userId,
+        datasetVersions.datasetId,
+        datasetVersions.id
+      ]
+    }),
+    check(
+      "analysis_plans_plan_check",
+      sql`jsonb_typeof(${table.plan}) = 'object' and ${table.plan}->>'version' = '1'
+        and pg_column_size(${table.plan}) <= 32768`
+    ),
+    check("analysis_plans_hash_check", sql`${table.planHash} ~ '^[0-9a-f]{64}$'`),
+    check(
+      "analysis_plans_validation_status_check",
+      sql`${table.validationStatus} = 'validated'`
+    )
+  ]
+);
+
+export const analysisResults = pgTable(
+  "analysis_results",
+  {
+    id: uuid("id").primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    conversationId: uuid("conversation_id").notNull(),
+    runId: uuid("run_id").notNull(),
+    datasetId: uuid("dataset_id").notNull(),
+    datasetVersionId: uuid("dataset_version_id").notNull(),
+    planId: uuid("plan_id").notNull(),
+    planHash: varchar("plan_hash", { length: 64 }).notNull(),
+    resultSchema: jsonb("result_schema").notNull(),
+    rows: jsonb("rows").notNull(),
+    rowCount: integer("row_count").notNull(),
+    truncated: boolean("truncated").notNull(),
+    executionMs: integer("execution_ms").notNull(),
+    checksum: varchar("checksum", { length: 64 }).notNull(),
+    provenance: jsonb("provenance").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
+  },
+  (table) => [
+    uniqueIndex("analysis_results_user_id_unique").on(table.userId, table.id),
+    uniqueIndex("analysis_results_user_run_unique").on(table.userId, table.runId),
+    index("analysis_results_user_conversation_created_idx").on(
+      table.userId,
+      table.conversationId,
+      table.createdAt
+    ),
+    foreignKey({
+      name: "analysis_results_user_run_plan_fk",
+      columns: [table.userId, table.runId, table.planId],
+      foreignColumns: [analysisPlans.userId, analysisPlans.runId, analysisPlans.id]
+    }).onDelete("cascade"),
+    foreignKey({
+      name: "analysis_results_user_dataset_version_fk",
+      columns: [table.userId, table.datasetId, table.datasetVersionId],
+      foreignColumns: [
+        datasetVersions.userId,
+        datasetVersions.datasetId,
+        datasetVersions.id
+      ]
+    }),
+    check(
+      "analysis_results_schema_check",
+      sql`jsonb_typeof(${table.resultSchema}) = 'array'
+        and jsonb_array_length(${table.resultSchema}) between 1 and 20
+        and pg_column_size(${table.resultSchema}) <= 32768`
+    ),
+    check(
+      "analysis_results_rows_check",
+      sql`jsonb_typeof(${table.rows}) = 'array'
+        and jsonb_array_length(${table.rows}) <= 500
+        and pg_column_size(${table.rows}) <= 2097152`
+    ),
+    check(
+      "analysis_results_counts_check",
+      sql`${table.rowCount} >= 0 and ${table.executionMs} >= 0`
+    ),
+    check("analysis_results_checksum_check", sql`${table.checksum} ~ '^[0-9a-f]{64}$'`),
+    check("analysis_results_plan_hash_check", sql`${table.planHash} ~ '^[0-9a-f]{64}$'`),
+    check(
+      "analysis_results_provenance_check",
+      sql`jsonb_typeof(${table.provenance}) = 'object'
+        and ${table.provenance}->>'version' = '1'
+        and pg_column_size(${table.provenance}) <= 65536`
+    )
+  ]
+);
+
+export const chartArtifacts = pgTable(
+  "chart_artifacts",
+  {
+    id: uuid("id").primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    conversationId: uuid("conversation_id").notNull(),
+    runId: uuid("run_id").notNull(),
+    messageId: uuid("message_id").notNull(),
+    resultArtifactId: uuid("result_artifact_id").notNull(),
+    chartSpec: jsonb("chart_spec").notNull(),
+    schemaVersion: integer("schema_version").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
+  },
+  (table) => [
+    uniqueIndex("chart_artifacts_user_result_unique").on(
+      table.userId,
+      table.resultArtifactId
+    ),
+    index("chart_artifacts_user_message_idx").on(table.userId, table.messageId),
+    foreignKey({
+      name: "chart_artifacts_user_conversation_run_fk",
+      columns: [table.userId, table.conversationId, table.runId],
+      foreignColumns: [agentRuns.userId, agentRuns.conversationId, agentRuns.id]
+    }).onDelete("cascade"),
+    foreignKey({
+      name: "chart_artifacts_user_conversation_message_fk",
+      columns: [table.userId, table.conversationId, table.messageId],
+      foreignColumns: [
+        conversationMessages.userId,
+        conversationMessages.conversationId,
+        conversationMessages.id
+      ]
+    }).onDelete("cascade"),
+    foreignKey({
+      name: "chart_artifacts_user_result_fk",
+      columns: [table.userId, table.resultArtifactId],
+      foreignColumns: [analysisResults.userId, analysisResults.id]
+    }).onDelete("cascade"),
+    check("chart_artifacts_schema_version_check", sql`${table.schemaVersion} = 1`),
+    check(
+      "chart_artifacts_spec_check",
+      sql`jsonb_typeof(${table.chartSpec}) = 'object'
+        and ${table.chartSpec}->>'version' = '1'
+        and pg_column_size(${table.chartSpec}) <= 65536`
+    )
+  ]
+);
+
 export const analysisThreads = pgTable(
   "analysis_threads",
   {

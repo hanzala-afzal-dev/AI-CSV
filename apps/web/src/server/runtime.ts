@@ -24,6 +24,7 @@ import {
   OpenAiProviderGateway,
   PostgresConversationRepository,
   PostgresDatasetRepository,
+  PostgresAnalysisRepository,
   PostgresProviderSettingsRepository
 } from "@agentic-csv/infrastructure";
 import { RedisLeaseLimiter } from "@agentic-csv/infrastructure";
@@ -43,6 +44,7 @@ export interface WebRuntime {
   readonly providerSettingsService: ProviderSettingsService;
   readonly conversationService: ConversationService;
   readonly datasetService: DatasetService;
+  readonly analysisRepository: PostgresAnalysisRepository;
 }
 
 function createRuntime(): WebRuntime {
@@ -102,7 +104,8 @@ function createRuntime(): WebRuntime {
       }
     ),
     conversationService: new ConversationService(conversationRepository),
-    datasetService: new DatasetService(datasetRepository)
+    datasetService: new DatasetService(datasetRepository),
+    analysisRepository: new PostgresAnalysisRepository(database)
   };
 }
 

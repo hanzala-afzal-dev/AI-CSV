@@ -29,18 +29,42 @@ export class ConversationRunService {
         runId: work.runId,
         assistantMessageId: this.createId(),
         assistantText: response.text,
+        ...(response.analysis ? { analysis: response.analysis } : {}),
         generatedTitle: titleFromFirstMessage(work.content),
         occurredAt: this.now()
       });
-    } catch {
+    } catch (error) {
+      const failure = analysisFailure(error);
       await this.repository.failRun({
         userId: work.userId,
         conversationId: work.conversationId,
         runId: work.runId,
-        code: "ASSISTANT_RESPONSE_FAILED",
-        message: "The assistant could not complete this response.",
+        code: failure.code,
+        message: failure.message,
         occurredAt: this.now()
       });
     }
   }
+}
+
+function analysisFailure(error: unknown): {
+  readonly code: string;
+  readonly message: string;
+} {
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    "name" in error &&
+    error.name === "AnalysisError" &&
+    "code" in error &&
+    typeof error.code === "string" &&
+    "message" in error &&
+    typeof error.message === "string"
+  ) {
+    return { code: error.code, message: error.message };
+  }
+  return {
+    code: "ASSISTANT_RESPONSE_FAILED",
+    message: "The assistant could not complete this response."
+  };
 }
