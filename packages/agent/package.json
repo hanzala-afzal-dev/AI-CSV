@@ -11,13 +11,16 @@
   },
   "scripts": {
     "build": "tsup src/index.ts --format esm --dts --clean",
+    "dev": "tsup src/index.ts --format esm --dts --watch",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run tests/*.test.ts --passWithNoTests",
     "test:coverage": "vitest run tests/*.test.ts --coverage --passWithNoTests"
   },
   "dependencies": {
+    "@agentic-csv/application": "workspace:*",
     "@agentic-csv/contracts": "workspace:*",
+    "@agentic-csv/domain": "workspace:*",
     "@langchain/core": "1.2.1",
     "@langchain/langgraph": "1.4.7",
     "@langchain/openai": "1.5.3",

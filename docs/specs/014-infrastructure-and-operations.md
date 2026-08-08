@@ -12,10 +12,14 @@ Required local services:
 - `postgres` — transactional store, optionally pgvector extension but Qdrant remains primary vector store
 - `redis` — queues, rate limits and ephemeral coordination
 - `qdrant` — vector database
-- `minio` or LocalStack S3 — object storage
+- `minio` — local S3-compatible object storage
 - optional mail catcher for verification/reset development
 
 DuckDB is embedded in `worker`/analysis process and does not need a Compose service.
+
+MinIO development storage must mount `/data` to a named volume. A normal container stop/start must retain
+uploaded CSV objects; the explicit reset workflow may delete them. A one-shot initialization service must
+create the development bucket idempotently and enable object versioning.
 
 ## 2. Docker commands
 

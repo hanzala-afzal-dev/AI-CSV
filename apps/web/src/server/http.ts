@@ -570,6 +570,7 @@ function mapError(error: unknown): {
     const statusByCode: Record<string, number> = {
       CONVERSATION_NOT_FOUND: 404,
       CONVERSATION_RUN_NOT_FOUND: 404,
+      CONVERSATION_CLARIFICATION_NOT_PENDING: 409,
       CONVERSATION_ARCHIVED: 409,
       CONVERSATION_CONFLICT: 409,
       CONVERSATION_RUN_ACTIVE: 409,

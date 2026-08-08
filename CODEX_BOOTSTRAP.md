@@ -88,7 +88,7 @@ The completed foundation must include:
 6. PostgreSQL with Drizzle ORM.
 7. Redis for BullMQ and rate limiting.
 8. Qdrant as the dedicated vector database.
-9. LocalStack S3 for local object storage.
+9. MinIO S3 for local object storage.
 10. DuckDB infrastructure readiness for later CSV analysis.
 11. LangChain/LangGraph package scaffolding.
 12. Typed environment validation using Zod.
@@ -236,7 +236,6 @@ agentic-csv-analyst/
 │   ├── .env.example
 │   ├── Dockerfile.web
 │   ├── Dockerfile.worker
-│   ├── localstack/init/
 │   └── postgres/init/
 ├── scripts/
 │   └── check-env.mjs
@@ -289,7 +288,7 @@ Use:
 - BullMQ
 - Qdrant
 - AWS SDK v3 S3 client
-- LocalStack for local S3
+- MinIO for local S3
 - DuckDB Node API for future in-process analytics
 - LangChain JavaScript packages
 - LangGraph JavaScript package
@@ -584,7 +583,8 @@ QDRANT_VECTOR_SIZE
 ### S3-compatible storage
 
 ```text
-LOCALSTACK_PORT
+S3_LOCAL_PORT
+MINIO_CONSOLE_PORT
 S3_ENDPOINT
 S3_PUBLIC_ENDPOINT
 S3_REGION
@@ -702,12 +702,13 @@ Support at minimum:
 - presigned upload URL generation
 - configurable expiry
 - configurable endpoint
-- path-style mode for LocalStack
+- path-style mode for MinIO and other compatible local providers
 - object key namespacing by owner/tenant and dataset
 
 Do not proxy large CSV file bodies through Next.js in the eventual design. Presigned direct upload is the intended pattern.
 
-Create a LocalStack initialization script that creates the development bucket idempotently.
+Create a one-shot MinIO initialization service that creates the development bucket idempotently and
+enables versioning.
 
 ---
 
@@ -813,7 +814,7 @@ Create:
 - PostgreSQL
 - Redis
 - Qdrant
-- S3/LocalStack
+- S3/MinIO
 
 Return:
 
@@ -893,12 +894,17 @@ Create the auto-discovered `docker/compose.yaml` wrapper and local stack templat
 - persistent named volume
 - local dashboard accessibility
 
-### `localstack`
+### `minio`
 
-- S3 service only
 - persistent named volume
-- bucket initialization script
+- S3 API and local console ports
 - health check
+
+### `minio-init`
+
+- one-shot bucket initialization
+- idempotent bucket creation
+- object versioning enabled
 
 ### `web`
 
@@ -928,7 +934,7 @@ Required workflows must work:
 docker compose --env-file .env -f docker/compose.yaml --profile app config --quiet
 
 # Infrastructure only
-docker compose --env-file .env -f docker/compose.yaml up -d postgres redis qdrant localstack mailpit
+docker compose --env-file .env -f docker/compose.yaml up -d postgres redis qdrant minio minio-init mailpit
 
 # Build application images
 docker compose --env-file .env -f docker/compose.yaml --profile app build web worker
@@ -968,11 +974,11 @@ Provide root scripts equivalent to:
   "db:generate": "drizzle-kit generate",
   "db:migrate": "drizzle-kit migrate",
   "db:studio": "drizzle-kit studio",
-  "infra:up": "docker compose --env-file .env -f docker/compose.yaml up -d postgres redis qdrant localstack mailpit",
+  "infra:up": "docker compose --env-file .env -f docker/compose.yaml up -d postgres redis qdrant minio minio-init mailpit",
   "infra:down": "docker compose --env-file .env -f docker/compose.yaml down",
   "infra:reset": "docker compose --env-file .env -f docker/compose.yaml down -v --remove-orphans",
   "docker:config": "docker compose --env-file .env -f docker/compose.yaml --profile app config --quiet",
-  "docker:pull": "docker compose --env-file .env -f docker/compose.yaml pull postgres redis qdrant localstack mailpit",
+  "docker:pull": "docker compose --env-file .env -f docker/compose.yaml pull postgres redis qdrant minio minio-init mailpit",
   "docker:build": "docker compose --env-file .env -f docker/compose.yaml --profile app build web worker",
   "docker:build:web:production": "docker build --file docker/Dockerfile.web --target runner --tag agentic-csv-analyst-web:production .",
   "docker:build:worker:production": "docker build --file docker/Dockerfile.worker --target runner --tag agentic-csv-analyst-worker:production .",
@@ -1059,7 +1065,7 @@ Create ADRs for at least:
 2. PostgreSQL with Drizzle ORM
 3. Redis with BullMQ
 4. Qdrant as primary vector store
-5. S3-compatible object storage with LocalStack locally
+5. S3-compatible object storage with MinIO locally
 
 Each ADR must include:
 
@@ -1091,7 +1097,7 @@ Create a high-quality `README.md` that includes:
 - explicit `docker compose build` commands
 - migration commands
 - health/readiness URLs
-- Qdrant and LocalStack local URLs
+- Qdrant and MinIO local URLs
 - environment strategy
 - quality commands
 - specification-driven workflow
@@ -1255,7 +1261,7 @@ After startup, verify:
 GET http://localhost:3000/api/health -> HTTP 200
 GET http://localhost:3000/api/ready  -> HTTP 200 when dependencies are healthy
 Qdrant dashboard is reachable
-LocalStack reports S3 healthy
+MinIO reports S3 healthy
 The development S3 bucket exists
 The worker starts and remains healthy/running
 ```
@@ -1288,7 +1294,7 @@ The task is complete only when all applicable items are true:
 - [ ] Type checking passes.
 - [ ] The monorepo builds.
 - [ ] Environment validation fails clearly on invalid values.
-- [ ] PostgreSQL, Redis, Qdrant, and LocalStack are defined with persistent volumes.
+- [ ] PostgreSQL, Redis, Qdrant, and MinIO are defined with persistent volumes.
 - [ ] Web and worker images build from separate Dockerfiles.
 - [ ] `pnpm docker:up:build` is documented.
 - [ ] Health and readiness routes return structured responses.

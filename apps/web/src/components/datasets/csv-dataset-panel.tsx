@@ -43,6 +43,7 @@ export function CsvDatasetPanel({
   const version = dataset?.activeVersion ?? null;
   const status = version?.status ?? null;
   const failed = status === "failed";
+  const waitingForUpload = status === "pending_upload";
   const ready = status === "ready" && profile !== null;
 
   return (
@@ -88,8 +89,14 @@ export function CsvDatasetPanel({
               : `CSV only, up to ${formatBytes(maxBytes)}. Your data remains isolated to your account.`}
           </p>
         </div>
-        {failed ? (
-          <Button type="button" variant="secondary" size="sm" onClick={onChoose}>
+        {failed || (waitingForUpload && !busy) ? (
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            disabled={busy}
+            onClick={onChoose}
+          >
             <RefreshCw size={15} />
             Retry
           </Button>

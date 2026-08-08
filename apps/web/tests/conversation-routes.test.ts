@@ -41,6 +41,7 @@ const state = vi.hoisted(() => {
       setArchived: vi.fn(),
       delete: vi.fn(),
       submitMessage: vi.fn(),
+      resumeRun: vi.fn(),
       cancelRun: vi.fn(),
       listRunEvents: vi.fn()
     }
@@ -112,6 +113,7 @@ import {
   PATCH as updateConversationRoute
 } from "../src/app/api/v1/conversations/[conversationId]/route";
 import { POST as submitMessageRoute } from "../src/app/api/v1/conversations/[conversationId]/messages/route";
+import { POST as submitClarificationRoute } from "../src/app/api/v1/conversations/[conversationId]/runs/[runId]/clarifications/route";
 import { GET as streamEventsRoute } from "../src/app/api/v1/conversations/[conversationId]/runs/[runId]/events/route";
 
 const correlationId = "66666666-6666-4666-8666-666666666666";
@@ -146,6 +148,18 @@ describe("conversation routes", () => {
       messageId: state.messageId,
       runId: state.runId,
       replayed: false
+    });
+    state.conversationService.resumeRun.mockReset().mockResolvedValue({
+      id: state.runId,
+      conversationId: state.conversationId,
+      userMessageId: state.messageId,
+      status: "queued",
+      failureCode: null,
+      failureMessage: null,
+      progressStage: null,
+      clarification: null,
+      createdAt: state.now,
+      updatedAt: state.now
     });
     state.conversationService.listRunEvents.mockReset().mockResolvedValue({
       status: "completed",
@@ -280,6 +294,42 @@ describe("conversation routes", () => {
         runId: state.runId,
         eventsUrl: `/api/v1/conversations/${state.conversationId}/runs/${state.runId}/events`
       }
+    });
+  });
+
+  it("requires CSRF and derives clarification ownership from the session", async () => {
+    const path = `/conversations/${state.conversationId}/runs/${state.runId}/clarifications`;
+    const params = Promise.resolve({
+      conversationId: state.conversationId,
+      runId: state.runId
+    });
+    const rejected = await submitClarificationRoute(
+      mutationRequest(path, { answer: "net_revenue" }, null),
+      { params }
+    );
+    expect(rejected.status).toBe(403);
+    expect(state.conversationService.resumeRun).not.toHaveBeenCalled();
+
+    const response = await submitClarificationRoute(
+      mutationRequest(path, { answer: "net_revenue" }),
+      {
+        params: Promise.resolve({
+          conversationId: state.conversationId,
+          runId: state.runId
+        })
+      }
+    );
+
+    expect(response.status).toBe(202);
+    expect(state.conversationService.resumeRun).toHaveBeenCalledWith({
+      userId: state.userId,
+      conversationId: state.conversationId,
+      runId: state.runId,
+      answer: "net_revenue",
+      correlationId
+    });
+    await expect(response.json()).resolves.toMatchObject({
+      data: { run: { id: state.runId, status: "queued" } }
     });
   });
 

@@ -100,6 +100,7 @@ export function uploadToSignedUrl(
   return new Promise((resolve, reject) => {
     const request = new XMLHttpRequest();
     request.open(intent.method, intent.uploadUrl);
+    request.timeout = 5 * 60 * 1000;
     for (const [name, value] of Object.entries(intent.requiredHeaders)) {
       request.setRequestHeader(name, value);
     }
@@ -110,6 +111,8 @@ export function uploadToSignedUrl(
     };
     request.onerror = () => reject(new Error("The CSV upload could not reach storage."));
     request.onabort = () => reject(new Error("The CSV upload was cancelled."));
+    request.ontimeout = () =>
+      reject(new Error("The CSV upload timed out. Check your connection and retry."));
     request.onload = () => {
       if (request.status >= 200 && request.status < 300) {
         onProgress(100);

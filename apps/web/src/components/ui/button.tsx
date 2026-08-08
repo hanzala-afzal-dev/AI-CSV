@@ -26,6 +26,7 @@ const buttonVariants = cva(
 export interface ButtonProps
   extends ButtonHTMLAttributes<HTMLButtonElement>, VariantProps<typeof buttonVariants> {
   readonly asChild?: boolean;
+  readonly autoComplete?: "off" | "on";
 }
 
 export function Button({ className, variant, size, asChild, ...props }: ButtonProps) {

@@ -103,7 +103,8 @@ export const envSchema = z
     QDRANT_COLLECTION: z.string().min(1),
     QDRANT_VECTOR_SIZE: integerFromString(z.number().positive()),
 
-    LOCALSTACK_PORT: integerFromString(z.number().min(1).max(65535)),
+    S3_LOCAL_PORT: integerFromString(z.number().min(1).max(65535)),
+    MINIO_CONSOLE_PORT: integerFromString(z.number().min(1).max(65535)),
     S3_ENDPOINT: z.string().url(),
     S3_PUBLIC_ENDPOINT: z.preprocess(emptyStringAsUndefined, z.string().url().optional()),
     S3_REGION: z.string().min(1),
@@ -142,6 +143,15 @@ export const envSchema = z
     OPENAI_VALIDATION_TIMEOUT_MS: integerFromString(
       z.number().min(500).max(30_000)
     ).default(5000),
+    AGENT_PROVIDER_TIMEOUT_MS: integerFromString(
+      z.number().min(1_000).max(300_000)
+    ).default(60_000),
+    AGENT_MAX_STEPS: integerFromString(z.number().min(8).max(100)).default(20),
+    AGENT_MAX_REPAIRS: integerFromString(z.number().min(0).max(10)).default(2),
+    AGENT_MAX_TOOL_CALLS: integerFromString(z.number().min(2).max(50)).default(12),
+    AGENT_MAX_RESULT_ROWS_TO_MODEL: integerFromString(z.number().min(1).max(200)).default(
+      200
+    ),
     DEFAULT_OPENAI_MODEL: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$/),
     DEFAULT_REASONING_EFFORT: z.enum([
       "none",

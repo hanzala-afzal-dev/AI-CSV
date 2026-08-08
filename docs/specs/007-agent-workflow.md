@@ -26,8 +26,6 @@ type CsvAnalystState = {
   query?: CompiledQuery;
   result?: AnalysisResult;
   chartSpec?: ChartSpec;
-  suggestions: SuggestedPrompt[];
-
   assumptions: string[];
   warnings: string[];
   errors: AgentError[];
@@ -49,16 +47,18 @@ START
   -> validate_plan
        -> clarification_interrupt (when material ambiguity exists)
        -> compile_query
-  -> validate_query
   -> execute_analysis
   -> verify_result
-       -> repair_plan (bounded)
-       -> select_visualization
+  -> select_visualization
   -> generate_explanation
-  -> generate_follow_up_suggestions
   -> persist_output
   -> END
 ```
+
+Plan validation may route through `repair_plan` at most the configured number of times before compilation.
+A deterministic execution or result-integrity failure is not sent to the model for repair; it fails safely.
+The graph returns one typed finalized output and the application run service persists the assistant message
+and artifacts atomically. Follow-up suggestion generation is owned by Phase 9.
 
 ## 4. Intent types
 
@@ -103,6 +103,18 @@ type AnalysisPlan = {
 
 Column references must resolve against the active version's canonical schema.
 
+Provider wire schemas must comply with OpenAI strict structured-output rules: every object property is
+required, application-level optional values are represented as nullable on the wire, and provider output is
+normalized into a structurally valid planning draft. Semantic application validation belongs to the graph's
+`validate_plan` node so an operation-shape failure receives schema-authored feedback through the bounded
+`repair_plan` route. HTTP request/schema rejections and response parsing failures must remain distinct typed
+errors.
+
+An executable dataset request must not terminate as `unsupported` merely because a requested concept is
+absent from the active schema. The bounded repair path must require a typed clarification grounded in
+available columns. Informational capability or out-of-scope questions may return bounded model prose, but
+only from trusted operation and visualization metadata supplied separately from untrusted dataset content.
+
 ## 6. Clarification rules
 
 Ask before execution when:
@@ -116,9 +128,19 @@ Ask before execution when:
 
 Do not ask when a safe conventional interpretation is clearly available and disclosed as an assumption.
 
+An answered clarification that selects a dataset column must be bound to the repaired plan. Provider-created
+clarifications may bind that column as a dimension, measure or filter according to the question. A
+server-created revenue-definition clarification is stricter and must bind the selected column as a measure.
+Validation feedback must describe the actual clarification contract and must not assume every selected
+column is a revenue measure.
+
+After deterministic execution and verification, malformed provider explanation prose must not discard the
+result or chart. Persist the verified artifacts with a safe explanatory fallback and retain sanitized
+provider validation diagnostics for operators.
+
 ## 7. Tools
 
-Required narrow tools:
+Required capability boundaries:
 
 - `get_dataset_profile`
 - `get_column_profile`
@@ -131,6 +153,14 @@ Required narrow tools:
 - `persist_chart_artifact`
 
 Tool input schemas include resource IDs but tools independently enforce the trusted actor context.
+
+Phase 7 exposes only the capabilities needed by the analytical slice. `get_dataset_profile` includes bounded
+column metadata; `compile_analysis_plan`, read-only execution, correlation, result validation and chart
+persistence reuse the Phase 6 application service/compiler rather than creating model-callable SQL or file
+tools. `sample_authorized_rows` is disabled until a demonstrated planning case requires it. It must never be
+enabled as unrestricted CSV access. `search_dataset_context` remains an empty typed boundary until Phase 8,
+where mandatory tenant/dataset/version filters are implemented. The configured tool-call limit counts every
+enabled external capability invocation.
 
 ## 8. Limits
 

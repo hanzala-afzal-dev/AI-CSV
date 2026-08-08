@@ -60,3 +60,4 @@ export {
 } from "./conversations";
 export { PostgresDatasetRepository } from "./datasets";
 export { PostgresAnalysisRepository } from "./analytics/postgres-analysis-repository";
+export { PostgresAgentCheckpointRepository } from "./agents/postgres-agent-checkpoint-repository";

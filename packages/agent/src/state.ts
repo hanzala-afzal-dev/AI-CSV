@@ -1,19 +1,23 @@
 import { Annotation } from "@langchain/langgraph";
-import type { AgentAnalysisStateContract } from "@agentic-csv/contracts";
+import type {
+  AgentAnalysisStateContract,
+  AgentExplanationContract,
+  AgentPlanningDecisionDraftContract
+} from "@agentic-csv/contracts";
+import type { CompletedAnalysis } from "@agentic-csv/application";
+
+export interface AnalysisRuntimeState {
+  readonly snapshot: AgentAnalysisStateContract;
+  readonly decision: AgentPlanningDecisionDraftContract | null;
+  readonly analysis: CompletedAnalysis | null;
+  readonly explanation: AgentExplanationContract | null;
+  readonly finalText: string | null;
+  readonly outcome: "continue" | "waiting_for_user" | "unsupported" | "completed";
+}
 
 export const AnalysisStateAnnotation = Annotation.Root({
-  correlationId: Annotation<string>(),
-  userId: Annotation<string>(),
-  datasetId: Annotation<string>(),
-  datasetVersion: Annotation<number | undefined>(),
-  question: Annotation<string>(),
-  retrievedContext: Annotation<string[]>({
-    reducer: (_current, update) => update,
-    default: () => []
-  }),
-  plannedSteps: Annotation<string[]>({
-    reducer: (_current, update) => update,
-    default: () => []
+  value: Annotation<AnalysisRuntimeState>({
+    reducer: (_current, update) => update
   })
 });
 

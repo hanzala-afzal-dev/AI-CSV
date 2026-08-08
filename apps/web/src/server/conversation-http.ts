@@ -79,6 +79,8 @@ export function safeRun(run: AgentRunView) {
     eventsUrl: runEventsUrl(run.conversationId, run.id),
     failureCode: run.failureCode,
     failureMessage: run.failureMessage,
+    progressStage: run.progressStage,
+    clarification: run.clarification,
     createdAt: run.createdAt.toISOString(),
     updatedAt: run.updatedAt.toISOString()
   };

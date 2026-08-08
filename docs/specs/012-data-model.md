@@ -160,13 +160,25 @@ references are added in Phase 5 with composite same-owner foreign keys rather th
 - status
 - client request ID unique per user
 - selected model/reasoning snapshot
-- step/repair counts
+- step/repair/tool-call counts and current bounded progress stage
 - failure code/message-safe
 - started/completed timestamps
 
 ### `agent_checkpoints`
 
-Prefer the official LangGraph PostgreSQL checkpointer schema where compatible. Ensure user/conversation ownership can be joined/enforced and deletion is supported.
+Use one current versioned checkpoint per user/run with conversation ownership, optimistic revision, bounded
+JSON state and timestamps. The application-owned schema is used instead of the generic LangGraph saver
+because tenant columns, composite run foreign keys, forced RLS, column grants and deletion behavior must be
+database-enforceable. Checkpoints cannot contain credentials, object keys, signed URLs, filesystem paths,
+raw CSV rows, provider response objects or executable query text.
+
+### `agent_clarifications`
+
+- ID plus user/conversation/run ownership, unique per run in the Phase 7 slice
+- bounded question and structured options
+- status (`pending`, `answered`)
+- normalized answer, answer message ID and asked/answered timestamps
+- pending/answered consistency check and same-owner run/message composite foreign keys
 
 ### `run_events`
 

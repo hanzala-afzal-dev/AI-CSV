@@ -405,6 +405,8 @@ export const agentRuns = pgTable(
     selectedReasoningEffort: varchar("selected_reasoning_effort", { length: 32 }),
     stepCount: integer("step_count").notNull().default(0),
     repairCount: integer("repair_count").notNull().default(0),
+    toolCallCount: integer("tool_call_count").notNull().default(0),
+    progressStage: varchar("progress_stage", { length: 32 }),
     failureCode: varchar("failure_code", { length: 80 }),
     failureMessage: varchar("failure_message", { length: 500 }),
     startedAt: timestamp("started_at", { withTimezone: true }),
@@ -446,7 +448,11 @@ export const agentRuns = pgTable(
     }).onDelete("cascade"),
     check(
       "agent_runs_count_check",
-      sql`${table.stepCount} >= 0 and ${table.repairCount} >= 0`
+      sql`${table.stepCount} >= 0 and ${table.repairCount} >= 0 and ${table.toolCallCount} >= 0`
+    ),
+    check(
+      "agent_runs_progress_stage_check",
+      sql`${table.progressStage} is null or ${table.progressStage} in ('authorizing', 'planning', 'validating', 'analyzing', 'verifying', 'explaining')`
     ),
     check(
       "agent_runs_terminal_timestamp_check",
@@ -485,11 +491,102 @@ export const runEvents = pgTable(
     check("run_events_sequence_check", sql`${table.sequence} > 0`),
     check(
       "run_events_type_check",
-      sql`${table.eventType} in ('run.queued', 'run.started', 'assistant.delta', 'run.completed', 'run.failed', 'run.cancelled')`
+      sql`${table.eventType} in ('run.queued', 'run.started', 'run.progress', 'run.clarification', 'run.resumed', 'assistant.delta', 'run.completed', 'run.failed', 'run.cancelled')`
     ),
     check(
       "run_events_payload_check",
       sql`jsonb_typeof(${table.payload}) = 'object' and ${table.payload}->>'version' = '1'`
+    )
+  ]
+);
+
+export const agentCheckpoints = pgTable(
+  "agent_checkpoints",
+  {
+    id: uuid("id").primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    conversationId: uuid("conversation_id").notNull(),
+    runId: uuid("run_id").notNull(),
+    revision: integer("revision").notNull().default(1),
+    state: jsonb("state").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
+  },
+  (table) => [
+    uniqueIndex("agent_checkpoints_user_run_unique").on(table.userId, table.runId),
+    index("agent_checkpoints_user_conversation_idx").on(
+      table.userId,
+      table.conversationId,
+      table.updatedAt
+    ),
+    foreignKey({
+      name: "agent_checkpoints_user_conversation_run_fk",
+      columns: [table.userId, table.conversationId, table.runId],
+      foreignColumns: [agentRuns.userId, agentRuns.conversationId, agentRuns.id]
+    }).onDelete("cascade"),
+    check("agent_checkpoints_revision_check", sql`${table.revision} > 0`),
+    check(
+      "agent_checkpoints_state_check",
+      sql`jsonb_typeof(${table.state}) = 'object'
+        and ${table.state}->>'version' = '1'
+        and ${table.state}->>'userId' = ${table.userId}::text
+        and ${table.state}->>'conversationId' = ${table.conversationId}::text
+        and ${table.state}->>'runId' = ${table.runId}::text
+        and pg_column_size(${table.state}) <= 524288`
+    )
+  ]
+);
+
+export const agentClarifications = pgTable(
+  "agent_clarifications",
+  {
+    id: uuid("id").primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    conversationId: uuid("conversation_id").notNull(),
+    runId: uuid("run_id").notNull(),
+    question: varchar("question", { length: 500 }).notNull(),
+    options: jsonb("options").notNull().default([]),
+    status: varchar("status", { length: 16 }).notNull(),
+    answer: varchar("answer", { length: 2000 }),
+    answerMessageId: uuid("answer_message_id"),
+    askedAt: timestamp("asked_at", { withTimezone: true }).notNull(),
+    answeredAt: timestamp("answered_at", { withTimezone: true })
+  },
+  (table) => [
+    uniqueIndex("agent_clarifications_user_run_unique").on(table.userId, table.runId),
+    foreignKey({
+      name: "agent_clarifications_user_conversation_run_fk",
+      columns: [table.userId, table.conversationId, table.runId],
+      foreignColumns: [agentRuns.userId, agentRuns.conversationId, agentRuns.id]
+    }).onDelete("cascade"),
+    foreignKey({
+      name: "agent_clarifications_user_conversation_message_fk",
+      columns: [table.userId, table.conversationId, table.answerMessageId],
+      foreignColumns: [
+        conversationMessages.userId,
+        conversationMessages.conversationId,
+        conversationMessages.id
+      ]
+    }),
+    check(
+      "agent_clarifications_status_check",
+      sql`${table.status} in ('pending', 'answered')`
+    ),
+    check(
+      "agent_clarifications_options_check",
+      sql`jsonb_typeof(${table.options}) = 'array'
+        and jsonb_array_length(${table.options}) <= 8
+        and pg_column_size(${table.options}) <= 16384`
+    ),
+    check(
+      "agent_clarifications_answer_check",
+      sql`(${table.status} = 'pending' and ${table.answer} is null and ${table.answerMessageId} is null and ${table.answeredAt} is null)
+        or (${table.status} = 'answered' and char_length(btrim(${table.answer})) between 1 and 2000
+          and ${table.answerMessageId} is not null and ${table.answeredAt} is not null)`
     )
   ]
 );

@@ -11,6 +11,7 @@ const now = new Date("2026-07-13T12:00:00.000Z");
 const userId = "11111111-1111-4111-8111-111111111111";
 const conversationId = "22222222-2222-4222-8222-222222222222";
 const runId = "33333333-3333-4333-8333-333333333333";
+const correlationId = "66666666-6666-4666-8666-666666666666";
 
 describe("ConversationService", () => {
   it("creates a validated user-owned conversation", async () => {
@@ -72,10 +73,15 @@ describe("ConversationRunService", () => {
       conversationId,
       runId,
       userMessageId: "44444444-4444-4444-8444-444444444444",
-      content: "Compare revenue by country"
+      content: "Compare revenue by country",
+      selectedModel: "gpt-5.5",
+      selectedReasoningEffort: "medium"
     }));
     const responder: ConversationResponder = {
-      respond: vi.fn(async () => ({ text: "Persisted response" }))
+      respond: vi.fn(async () => ({
+        state: "completed" as const,
+        text: "Persisted response"
+      }))
     };
     const service = new ConversationRunService(
       repository,
@@ -84,7 +90,7 @@ describe("ConversationRunService", () => {
       () => "55555555-5555-4555-8555-555555555555"
     );
 
-    await service.process({ userId, conversationId, runId });
+    await service.process({ userId, conversationId, runId, correlationId });
 
     expect(repository.completeRun).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -95,6 +101,48 @@ describe("ConversationRunService", () => {
     );
   });
 
+  it("pauses the same run when the responder needs clarification", async () => {
+    const repository = fakeRepository();
+    repository.claimRun = vi.fn(async () => ({
+      userId,
+      conversationId,
+      runId,
+      userMessageId: "44444444-4444-4444-8444-444444444444",
+      content: "Show revenue",
+      selectedModel: "gpt-5.5",
+      selectedReasoningEffort: "medium"
+    }));
+    const responder: ConversationResponder = {
+      respond: vi.fn(async () => ({
+        state: "waiting_for_user" as const,
+        clarification: {
+          id: "77777777-7777-4777-8777-777777777777",
+          question: "Which revenue definition?",
+          options: [{ value: "net_revenue", label: "Net revenue", columnId: null }],
+          status: "pending" as const,
+          answer: null
+        },
+        checkpoint: {} as never,
+        metrics: { stepCount: 5, repairCount: 0, toolCallCount: 1 }
+      }))
+    };
+
+    await new ConversationRunService(repository, responder, () => now).process({
+      userId,
+      conversationId,
+      runId,
+      correlationId
+    });
+
+    expect(repository.pauseRun).toHaveBeenCalledWith(
+      expect.objectContaining({
+        runId,
+        clarification: expect.objectContaining({ question: "Which revenue definition?" })
+      })
+    );
+    expect(repository.completeRun).not.toHaveBeenCalled();
+  });
+
   it("stores only a safe failure when the responder throws", async () => {
     const repository = fakeRepository();
     repository.claimRun = vi.fn(async () => ({
@@ -102,17 +150,27 @@ describe("ConversationRunService", () => {
       conversationId,
       runId,
       userMessageId: "44444444-4444-4444-8444-444444444444",
-      content: "Secret-bearing prompt"
+      content: "Secret-bearing prompt",
+      selectedModel: null,
+      selectedReasoningEffort: null
     }));
     const responder: ConversationResponder = {
       respond: vi.fn(async () => {
         throw new Error("provider detail must not persist");
       })
     };
-    await new ConversationRunService(repository, responder, () => now).process({
+    const onUnexpectedFailure = vi.fn();
+    await new ConversationRunService(
+      repository,
+      responder,
+      () => now,
+      undefined,
+      onUnexpectedFailure
+    ).process({
       userId,
       conversationId,
-      runId
+      runId,
+      correlationId
     });
 
     expect(repository.failRun).toHaveBeenCalledWith(
@@ -122,6 +180,15 @@ describe("ConversationRunService", () => {
       })
     );
     expect(JSON.stringify(vi.mocked(repository.failRun).mock.calls)).not.toContain(
+      "provider detail"
+    );
+    expect(onUnexpectedFailure).toHaveBeenCalledWith({
+      correlationId,
+      conversationId,
+      runId,
+      errorName: "Error"
+    });
+    expect(JSON.stringify(onUnexpectedFailure.mock.calls)).not.toContain(
       "provider detail"
     );
   });
@@ -145,6 +212,10 @@ function fakeRepository(): ConversationRepository {
     })),
     claimRun: vi.fn(async () => null),
     completeRun: vi.fn(async () => undefined),
+    pauseRun: vi.fn(async () => undefined),
+    resumeRun: vi.fn(async () => null),
+    recordRunProgress: vi.fn(async () => true),
+    isRunCancelled: vi.fn(async () => false),
     failRun: vi.fn(async () => undefined),
     cancelRun: vi.fn(async () => null),
     listRunEvents: vi.fn(async () => null)

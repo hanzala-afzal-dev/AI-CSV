@@ -141,6 +141,23 @@ export class ConversationService {
     return run;
   }
 
+  public async resumeRun(input: {
+    readonly userId: string;
+    readonly conversationId: string;
+    readonly runId: string;
+    readonly answer: string;
+    readonly correlationId: string;
+  }): Promise<AgentRunView> {
+    const run = await this.repository.resumeRun({
+      ...input,
+      answerMessageId: this.createId(),
+      answer: normalizeMessage(input.answer),
+      occurredAt: this.now()
+    });
+    if (!run) throw new ConversationError("CONVERSATION_RUN_NOT_FOUND", "Run not found.");
+    return run;
+  }
+
   public async listRunEvents(input: {
     readonly userId: string;
     readonly conversationId: string;
