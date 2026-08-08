@@ -1,22 +1,29 @@
 import { Worker } from "bullmq";
 import {
+  AgentProviderService,
   AnalysisService,
   ConversationRunService,
   DatasetIngestionService,
   DeterministicAnalysisPlanner
 } from "@agentic-csv/application";
 import {
+  LangChainOpenAiAgentGateway,
+  LangGraphConversationResponder
+} from "@agentic-csv/agent";
+import {
+  AesGcmCredentialCipher,
   createBullMqConnectionOptions,
   createDatabaseClient,
   createS3Client,
   createLogger,
   createPgPool,
-  DeterministicConversationResponder,
   loadEnv,
   OutboxDispatcher,
   PostgresAnalysisRepository,
+  PostgresAgentCheckpointRepository,
   PostgresDatasetRepository,
   PostgresConversationRepository,
+  PostgresProviderSettingsRepository,
   S3ObjectStorage,
   queueNames
 } from "@agentic-csv/infrastructure";
@@ -35,6 +42,14 @@ const outboxDispatcher = new OutboxDispatcher(database, env, logger);
 const datasetRepository = new PostgresDatasetRepository(database);
 const objectStorage = new S3ObjectStorage(createS3Client(env), env.S3_BUCKET);
 const analysisRepository = new PostgresAnalysisRepository(database);
+const conversationRepository = new PostgresConversationRepository(database);
+const credentialCipher = new AesGcmCredentialCipher({
+  currentKey: env.APP_ENCRYPTION_KEY,
+  currentKeyVersion: env.APP_ENCRYPTION_KEY_VERSION,
+  ...(env.APP_ENCRYPTION_PREVIOUS_KEYS === undefined
+    ? {}
+    : { previousKeys: env.APP_ENCRYPTION_PREVIOUS_KEYS })
+});
 const datasetIngestionService = new DatasetIngestionService(
   datasetRepository,
   objectStorage,
@@ -49,24 +64,46 @@ const datasetIngestionService = new DatasetIngestionService(
   }),
   env.INGESTION_CLAIM_TTL_SECONDS
 );
+const analysisService = new AnalysisService(
+  analysisRepository,
+  objectStorage,
+  new DeterministicAnalysisPlanner(),
+  new DuckDbAnalysisEngine({
+    maxScanBytes: env.ANALYSIS_MAX_SCAN_BYTES,
+    maxResultRows: env.ANALYSIS_MAX_RESULT_ROWS,
+    maxResultBytes: env.ANALYSIS_MAX_RESULT_BYTES,
+    timeoutMs: env.ANALYSIS_QUERY_TIMEOUT_MS,
+    memoryLimitMb: env.DUCKDB_MEMORY_LIMIT_MB,
+    threads: env.ANALYSIS_DUCKDB_THREADS
+  })
+);
 const conversationRunService = new ConversationRunService(
-  new PostgresConversationRepository(database),
-  new DeterministicConversationResponder(
-    datasetRepository,
-    new AnalysisService(
-      analysisRepository,
-      objectStorage,
-      new DeterministicAnalysisPlanner(),
-      new DuckDbAnalysisEngine({
-        maxScanBytes: env.ANALYSIS_MAX_SCAN_BYTES,
-        maxResultRows: env.ANALYSIS_MAX_RESULT_ROWS,
-        maxResultBytes: env.ANALYSIS_MAX_RESULT_BYTES,
-        timeoutMs: env.ANALYSIS_QUERY_TIMEOUT_MS,
-        memoryLimitMb: env.DUCKDB_MEMORY_LIMIT_MB,
-        threads: env.ANALYSIS_DUCKDB_THREADS
+  conversationRepository,
+  new LangGraphConversationResponder(
+    analysisService,
+    new AgentProviderService(
+      new PostgresProviderSettingsRepository(database),
+      credentialCipher,
+      new LangChainOpenAiAgentGateway({
+        baseUrl: env.OPENAI_API_BASE_URL,
+        timeoutMs: env.AGENT_PROVIDER_TIMEOUT_MS,
+        onProviderError: (providerError) =>
+          logger.warn({ providerError }, "OpenAI analytical request failed")
       })
-    )
-  )
+    ),
+    new PostgresAgentCheckpointRepository(database),
+    conversationRepository,
+    {
+      maxSteps: env.AGENT_MAX_STEPS,
+      maxRepairs: env.AGENT_MAX_REPAIRS,
+      maxToolCalls: env.AGENT_MAX_TOOL_CALLS,
+      maxResultRowsToModel: env.AGENT_MAX_RESULT_ROWS_TO_MODEL
+    }
+  ),
+  undefined,
+  undefined,
+  (diagnostic) =>
+    logger.error({ conversationRunFailure: diagnostic }, "conversation run failed")
 );
 let dispatchRunning = false;
 

@@ -2,8 +2,10 @@ import { randomUUID } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 import { analysisPlanSchema } from "@agentic-csv/contracts";
 import {
+  AnalysisError,
   AnalysisService,
   DeterministicAnalysisPlanner,
+  ObjectStorageError,
   type AnalysisColumnMetadata,
   type AnalysisEngine,
   type AnalysisReadRepository,
@@ -50,6 +52,53 @@ describe("deterministic analysis planning", () => {
 });
 
 describe("analysis service", () => {
+  it("maps a missing immutable CSV to an actionable typed failure", async () => {
+    const repository = {
+      loadRunContext: vi.fn().mockResolvedValue({
+        state: "ready",
+        context: readyContext()
+      }),
+      getArtifact: vi.fn()
+    } satisfies AnalysisReadRepository;
+    const service = new AnalysisService(
+      repository,
+      {
+        readObject: vi
+          .fn()
+          .mockRejectedValue(
+            new ObjectStorageError("OBJECT_NOT_FOUND", "safe storage detail")
+          )
+      } as unknown as ObjectStorage,
+      new DeterministicAnalysisPlanner(),
+      { execute: vi.fn() }
+    );
+
+    await expect(
+      service.executePlan({
+        userId: randomUUID(),
+        conversationId: randomUUID(),
+        runId: randomUUID(),
+        question: "What is this CSV about?",
+        plan: analysisPlanSchema.parse({
+          version: 1,
+          operation: "lookup",
+          dimensions: [{ columnId: regionId }],
+          measures: [],
+          filters: [],
+          sort: [],
+          limit: 10,
+          visualizationPreference: "table",
+          assumptions: []
+        })
+      })
+    ).rejects.toEqual(
+      new AnalysisError(
+        "ANALYSIS_SOURCE_MISSING",
+        "The attached CSV is no longer available. Upload it again and attach the new dataset."
+      )
+    );
+  });
+
   it("creates provenance and a validated chart without exposing the object key", async () => {
     const repository = {
       loadRunContext: vi.fn().mockResolvedValue({
@@ -212,5 +261,22 @@ function column(
     inferredType,
     semanticType,
     nullable: false
+  };
+}
+
+function readyContext() {
+  return {
+    userId: randomUUID(),
+    conversationId: randomUUID(),
+    runId: randomUUID(),
+    datasetId: randomUUID(),
+    datasetVersionId: randomUUID(),
+    datasetName: "Sales",
+    originalFilename: "sales.csv",
+    objectKey: "server-owned-key",
+    sizeBytes: 10,
+    checksumSha256: "checksum",
+    delimiter: "," as const,
+    columns
   };
 }

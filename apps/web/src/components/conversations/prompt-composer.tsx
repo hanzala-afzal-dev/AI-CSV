@@ -134,6 +134,7 @@ export function PromptComposer({
                   size="icon"
                   className="size-9"
                   aria-label="Send message"
+                  autoComplete="off"
                   disabled={!canSubmit}
                 >
                   <ArrowUp size={18} />

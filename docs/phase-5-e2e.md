@@ -1,6 +1,6 @@
 # Phase 5 end-to-end verification
 
-These checks exercise the real browser, PostgreSQL, Redis/BullMQ, LocalStack S3, worker, and DuckDB
+These checks exercise the real browser, PostgreSQL, Redis/BullMQ, MinIO S3, worker, and DuckDB
 profile path. Playwright is intentionally not required yet.
 
 ## 1. One-time upgrade
@@ -19,7 +19,7 @@ RATE_LIMIT_UPLOAD_INTENT_MAX_REQUESTS=10
 RATE_LIMIT_UPLOAD_COMPLETION_MAX_REQUESTS=20
 ```
 
-Existing local Compose files should also pass `APP_URL` to `localstack`, as shown in
+Existing local Compose files should include the `minio` and `minio-init` services shown in
 `docker/docker-compose.yml.example`. Validate and reconcile the environment:
 
 ```bash
@@ -105,4 +105,4 @@ pnpm docker:ps
 ```
 
 The E2E pass is complete when the happy path, invalid/retry path, reload behavior, and Alice/Bob check all
-pass while `web`, `worker`, PostgreSQL, Redis, and LocalStack remain healthy.
+pass while `web`, `worker`, PostgreSQL, Redis, and MinIO remain healthy.

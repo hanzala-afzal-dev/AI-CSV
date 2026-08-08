@@ -43,6 +43,9 @@ export const submitConversationMessageRequestSchema = z
     content: messageTextSchema
   })
   .strict();
+export const submitClarificationRequestSchema = z
+  .object({ answer: messageTextSchema.max(2_000) })
+  .strict();
 
 export const conversationListQuerySchema = z
   .object({
@@ -126,6 +129,36 @@ export const agentRunSummarySchema = z
     eventsUrl: z.string().startsWith("/api/v1/conversations/"),
     failureCode: z.string().max(80).nullable(),
     failureMessage: z.string().max(500).nullable(),
+    progressStage: z
+      .enum([
+        "authorizing",
+        "planning",
+        "validating",
+        "analyzing",
+        "verifying",
+        "explaining"
+      ])
+      .nullable()
+      .default(null),
+    clarification: z
+      .object({
+        id: z.string().uuid(),
+        question: z.string().min(1).max(500),
+        options: z
+          .array(
+            z
+              .object({
+                value: z.string().min(1).max(120),
+                label: z.string().min(1).max(160),
+                columnId: z.string().uuid().nullable()
+              })
+              .strict()
+          )
+          .max(8)
+      })
+      .strict()
+      .nullable()
+      .default(null),
     createdAt: z.string().datetime(),
     updatedAt: z.string().datetime()
   })
@@ -177,6 +210,49 @@ export const runStartedEventSchema = z
     payload: versionedEmptyPayloadSchema
   })
   .strict();
+export const runProgressEventSchema = z
+  .object({
+    ...runEventBase,
+    type: z.literal("run.progress"),
+    payload: z
+      .object({
+        version: z.literal(1),
+        stage: z.enum([
+          "authorizing",
+          "planning",
+          "validating",
+          "analyzing",
+          "verifying",
+          "explaining"
+        ]),
+        message: z.string().min(1).max(200)
+      })
+      .strict()
+  })
+  .strict();
+export const runClarificationEventSchema = z
+  .object({
+    ...runEventBase,
+    type: z.literal("run.clarification"),
+    payload: z
+      .object({
+        version: z.literal(1),
+        clarificationId: z.string().uuid(),
+        question: z.string().min(1).max(500),
+        options: z
+          .array(z.object({ value: z.string(), label: z.string() }).strict())
+          .max(8)
+      })
+      .strict()
+  })
+  .strict();
+export const runResumedEventSchema = z
+  .object({
+    ...runEventBase,
+    type: z.literal("run.resumed"),
+    payload: versionedEmptyPayloadSchema
+  })
+  .strict();
 export const assistantDeltaEventSchema = z
   .object({
     ...runEventBase,
@@ -217,6 +293,9 @@ export const runCancelledEventSchema = z
 export const runEventSchema = z.discriminatedUnion("type", [
   runQueuedEventSchema,
   runStartedEventSchema,
+  runProgressEventSchema,
+  runClarificationEventSchema,
+  runResumedEventSchema,
   assistantDeltaEventSchema,
   runCompletedEventSchema,
   runFailedEventSchema,
@@ -229,6 +308,7 @@ export type ArchiveConversationRequest = z.infer<typeof archiveConversationReque
 export type SubmitConversationMessageRequest = z.infer<
   typeof submitConversationMessageRequestSchema
 >;
+export type SubmitClarificationRequest = z.infer<typeof submitClarificationRequestSchema>;
 export type ConversationListQuery = z.infer<typeof conversationListQuerySchema>;
 export type ConversationMessageContent = z.infer<typeof conversationMessageContentSchema>;
 export type ConversationSummaryContract = z.infer<typeof conversationSummarySchema>;

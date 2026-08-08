@@ -9,24 +9,31 @@ import type {
 } from "@agentic-csv/contracts";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AnalysisArtifact } from "@/components/analysis/analysis-artifact";
+import { ClarificationPanel } from "./clarification-panel";
 
 export function MessageTimeline({
   detail,
   loading,
   streamedText,
   run,
-  datasetPanel
+  datasetPanel,
+  progressText,
+  clarificationBusy,
+  onClarification
 }: {
   readonly detail: ConversationDetailContract | null;
   readonly loading: boolean;
   readonly streamedText: string;
   readonly run: AgentRunSummaryContract | null;
   readonly datasetPanel: ReactNode;
+  readonly progressText: string;
+  readonly clarificationBusy: boolean;
+  readonly onClarification: (answer: string) => void;
 }) {
   const endRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     endRef.current?.scrollIntoView({ block: "end", behavior: "smooth" });
-  }, [detail?.messages.length, run?.status, streamedText]);
+  }, [detail?.messages.length, run?.status, streamedText, progressText]);
 
   if (loading) return <TimelineSkeleton />;
   if (!detail || detail.messages.length === 0) {
@@ -52,17 +59,29 @@ export function MessageTimeline({
             <Sparkles size={16} />
           </span>
           <div className="message-body">
-            {streamedText ? (
+            {run.status === "waiting_for_user" && run.clarification ? (
+              <ClarificationPanel
+                key={run.clarification.id}
+                clarification={run.clarification}
+                busy={clarificationBusy}
+                onSubmit={onClarification}
+              />
+            ) : streamedText ? (
               <p className="message-text">{streamedText}</p>
             ) : (
-              <div className="streaming-indicator" aria-hidden="true">
-                <span />
-                <span />
-                <span />
+              <div className="flex min-h-7 items-center gap-3 text-sm text-muted">
+                <div className="streaming-indicator" aria-hidden="true">
+                  <span />
+                  <span />
+                  <span />
+                </div>
+                <span>{progressText}</span>
               </div>
             )}
             <p className="sr-only" aria-live="polite">
-              Assistant response {run.status}.
+              {run.status === "waiting_for_user"
+                ? "Assistant needs clarification."
+                : progressText}
             </p>
           </div>
         </div>

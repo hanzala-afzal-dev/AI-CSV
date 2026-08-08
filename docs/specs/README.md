@@ -37,6 +37,7 @@ The assistant must let a user upload a CSV, ask natural-language questions, clar
 | 018 | [Open-source requirements](./018-open-source-requirements.md)            | No billing, BYOK, licensing and contributor experience   |
 | 019 | [Implementation plan](./019-implementation-plan.md)                      | Ordered delivery phases and definition of done           |
 | 020 | [Codex execution contract](./020-codex-execution-contract.md)            | Instructions for implementing from these specs           |
+| 021 | [Phase 8 execution contract](./021-phase-8-execution-contract.md)        | Concrete RAG and confirmed-memory delivery boundary      |
 
 ## How to use
 

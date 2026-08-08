@@ -40,6 +40,7 @@ import {
   renameConversation,
   setConversationDataset,
   setConversationArchived,
+  submitClarification,
   submitMessage
 } from "@/features/conversations/api";
 import { ConversationSidebar } from "./conversation-sidebar";
@@ -74,6 +75,8 @@ export function ConversationWorkspace({
   const [draft, setDraft] = useState("");
   const [run, setRun] = useState<AgentRunSummaryContract | null>(null);
   const [streamedText, setStreamedText] = useState("");
+  const [progressText, setProgressText] = useState("Preparing analysis");
+  const [clarificationBusy, setClarificationBusy] = useState(false);
   const [creating, setCreating] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [actionBusy, setActionBusy] = useState(false);
@@ -163,7 +166,6 @@ export function ConversationWorkspace({
         } else {
           setDatasetProfile(null);
         }
-        setDatasetError(null);
       } catch (cause) {
         if (cause instanceof ClientApiError && cause.status === 409) {
           setDatasetProfile(null);
@@ -182,6 +184,7 @@ export function ConversationWorkspace({
   useEffect(() => {
     setRunError(null);
     setStreamedText("");
+    setProgressText("Preparing analysis");
     if (!initialConversationId) {
       setDetail(null);
       setRun(null);
@@ -267,6 +270,7 @@ export function ConversationWorkspace({
 
   useEffect(() => {
     if (!run) return;
+    if (run.status === "waiting_for_user") return;
     const lastSequence = lastEventSequences.current.get(run.id) ?? 0;
     const separator = run.eventsUrl.includes("?") ? "&" : "?";
     const source = new EventSource(`${run.eventsUrl}${separator}after=${lastSequence}`);
@@ -293,6 +297,18 @@ export function ConversationWorkspace({
       lastEventSequences.current.set(run.id, event.sequence);
       if (event.type === "run.started") {
         setRun((current) => (current ? { ...current, status: "running" } : current));
+        setProgressText("Starting analysis");
+      } else if (event.type === "run.progress") {
+        setProgressText(event.payload.message);
+        setRun((current) =>
+          current
+            ? { ...current, status: "running", progressStage: event.payload.stage }
+            : current
+        );
+      } else if (event.type === "run.clarification") {
+        terminal = true;
+      } else if (event.type === "run.resumed") {
+        setProgressText("Resuming analysis");
       } else if (event.type === "assistant.delta") {
         setStreamedText((current) => current + event.payload.text);
       } else if (event.type === "run.failed") {
@@ -309,6 +325,9 @@ export function ConversationWorkspace({
     const eventTypes = [
       "run.queued",
       "run.started",
+      "run.progress",
+      "run.clarification",
+      "run.resumed",
       "assistant.delta",
       "run.completed",
       "run.failed",
@@ -321,7 +340,14 @@ export function ConversationWorkspace({
       }
     };
     return () => source.close();
-  }, [refreshAfterRun, run?.conversationId, run?.eventsUrl, run?.id]);
+  }, [
+    refreshAfterRun,
+    run?.conversationId,
+    run?.eventsUrl,
+    run?.id,
+    run?.updatedAt,
+    run?.status
+  ]);
 
   const createNewConversation = async () => {
     setCreating(true);
@@ -441,6 +467,7 @@ export function ConversationWorkspace({
       const now = new Date().toISOString();
       setDraft("");
       setStreamedText("");
+      setProgressText("Queued for analysis");
       setRun({
         id: submission.runId,
         conversationId,
@@ -449,6 +476,8 @@ export function ConversationWorkspace({
         eventsUrl: submission.eventsUrl,
         failureCode: null,
         failureMessage: null,
+        progressStage: null,
+        clarification: null,
         createdAt: now,
         updatedAt: now
       });
@@ -458,6 +487,28 @@ export function ConversationWorkspace({
       handleError(cause, "Message could not be sent.");
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const answerClarification = async (answer: string) => {
+    if (!run || run.status !== "waiting_for_user" || clarificationBusy) return;
+    setClarificationBusy(true);
+    setRunError(null);
+    try {
+      const resumed = await submitClarification(run.conversationId, run.id, answer);
+      setProgressText("Resuming analysis");
+      setRun(resumed);
+      await loadDetail(run.conversationId);
+    } catch (cause) {
+      if (cause instanceof ClientApiError && cause.status === 401) {
+        router.replace("/login");
+      } else {
+        setRunError(
+          cause instanceof Error ? cause.message : "The analysis could not be resumed."
+        );
+      }
+    } finally {
+      setClarificationBusy(false);
     }
   };
 
@@ -692,6 +743,9 @@ export function ConversationWorkspace({
             streamedText={streamedText}
             run={run}
             datasetPanel={datasetPanel}
+            progressText={progressText}
+            clarificationBusy={clarificationBusy}
+            onClarification={(answer) => void answerClarification(answer)}
           />
         </div>
         <PromptComposer

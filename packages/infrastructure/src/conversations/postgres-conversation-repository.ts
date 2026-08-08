@@ -12,13 +12,19 @@ import {
   type RunEventType,
   type RunEventView
 } from "@agentic-csv/application";
-import { conversationMessageContentSchema } from "@agentic-csv/contracts";
+import {
+  agentAnalysisStateSchema,
+  agentClarificationOptionSchema,
+  conversationMessageContentSchema
+} from "@agentic-csv/contracts";
 import {
   activeAgentRunStatuses,
   Conversation,
   type ConversationProps
 } from "@agentic-csv/domain";
 import {
+  agentCheckpoints,
+  agentClarifications,
   agentRuns,
   analysisPlans,
   analysisResults,
@@ -37,6 +43,7 @@ type ConversationRow = typeof conversations.$inferSelect;
 type MessageRow = typeof conversationMessages.$inferSelect;
 type RunRow = typeof agentRuns.$inferSelect;
 type EventRow = typeof runEvents.$inferSelect;
+type ClarificationRow = typeof agentClarifications.$inferSelect;
 
 export class PostgresConversationRepository implements ConversationRepository {
   public constructor(private readonly database: DatabaseClient) {}
@@ -139,10 +146,24 @@ export class PostgresConversationRepository implements ConversationRepository {
         )
         .orderBy(desc(agentRuns.createdAt))
         .limit(1);
+      const activeRun = activeRuns[0];
+      const [clarification] = activeRun
+        ? await transaction
+            .select()
+            .from(agentClarifications)
+            .where(
+              and(
+                eq(agentClarifications.userId, userId),
+                eq(agentClarifications.runId, activeRun.id),
+                eq(agentClarifications.status, "pending")
+              )
+            )
+            .limit(1)
+        : [];
       return {
         conversation: mapConversation(conversation),
         messages: messages.map(mapMessage),
-        activeRun: activeRuns[0] ? mapRun(activeRuns[0]) : null
+        activeRun: activeRun ? mapRun(activeRun, clarification) : null
       };
     });
   }
@@ -423,7 +444,9 @@ export class PostgresConversationRepository implements ConversationRepository {
         conversationId: input.conversationId,
         runId: input.runId,
         userMessageId: run.userMessageId,
-        content: extractText(message.contentParts)
+        content: extractText(message.contentParts),
+        selectedModel: run.selectedModel,
+        selectedReasoningEffort: run.selectedReasoningEffort
       };
     });
   }
@@ -508,6 +531,10 @@ export class PostgresConversationRepository implements ConversationRepository {
         .update(agentRuns)
         .set({
           status: "completed",
+          stepCount: input.metrics?.stepCount ?? run.stepCount,
+          repairCount: input.metrics?.repairCount ?? run.repairCount,
+          toolCallCount: input.metrics?.toolCallCount ?? run.toolCallCount,
+          progressStage: null,
           completedAt: input.occurredAt,
           failureCode: null,
           failureMessage: null,
@@ -544,6 +571,232 @@ export class PostgresConversationRepository implements ConversationRepository {
     });
   }
 
+  public pauseRun(
+    input: Parameters<ConversationRepository["pauseRun"]>[0]
+  ): Promise<void> {
+    return this.executeForUser(input.userId, async (transaction) => {
+      const [run] = await lockRun(transaction, input);
+      if (!run || run.status !== "running") return;
+      const sequence = await nextRunEventSequence(transaction, run.id);
+      await transaction
+        .insert(agentClarifications)
+        .values({
+          id: input.clarification.id,
+          userId: input.userId,
+          conversationId: input.conversationId,
+          runId: input.runId,
+          question: input.clarification.question,
+          options: input.clarification.options,
+          status: "pending",
+          askedAt: input.occurredAt
+        })
+        .onConflictDoNothing();
+      await transaction
+        .update(agentRuns)
+        .set({
+          status: "waiting_for_user",
+          stepCount: input.metrics.stepCount,
+          repairCount: input.metrics.repairCount,
+          toolCallCount: input.metrics.toolCallCount,
+          progressStage: null,
+          updatedAt: input.occurredAt
+        })
+        .where(eq(agentRuns.id, run.id));
+      await insertRunEvent(transaction, {
+        run,
+        sequence,
+        eventType: "run.clarification",
+        payload: {
+          version: 1,
+          clarificationId: input.clarification.id,
+          question: input.clarification.question,
+          options: input.clarification.options.map(({ value, label }) => ({
+            value,
+            label
+          }))
+        },
+        occurredAt: input.occurredAt
+      });
+    });
+  }
+
+  public resumeRun(
+    input: Parameters<ConversationRepository["resumeRun"]>[0]
+  ): Promise<AgentRunView | null> {
+    return this.executeForUser(input.userId, async (transaction) => {
+      const [run] = await lockRun(transaction, input);
+      if (!run) return null;
+      const [clarification] = await transaction
+        .select()
+        .from(agentClarifications)
+        .where(
+          and(
+            eq(agentClarifications.userId, input.userId),
+            eq(agentClarifications.conversationId, input.conversationId),
+            eq(agentClarifications.runId, input.runId)
+          )
+        )
+        .limit(1)
+        .for("update");
+      if (!clarification) return null;
+      if (clarification.status === "answered") {
+        if (clarification.answer === input.answer) return mapRun(run);
+        throw clarificationNotPending();
+      }
+      if (run.status !== "waiting_for_user") throw clarificationNotPending();
+      const [conversation] = await transaction
+        .select()
+        .from(conversations)
+        .where(
+          and(
+            eq(conversations.userId, input.userId),
+            eq(conversations.id, input.conversationId)
+          )
+        )
+        .limit(1)
+        .for("update");
+      if (!conversation) return null;
+      const [checkpoint] = await transaction
+        .select()
+        .from(agentCheckpoints)
+        .where(
+          and(
+            eq(agentCheckpoints.userId, input.userId),
+            eq(agentCheckpoints.conversationId, input.conversationId),
+            eq(agentCheckpoints.runId, input.runId)
+          )
+        )
+        .limit(1)
+        .for("update");
+      if (!checkpoint) throw clarificationNotPending();
+      const state = agentAnalysisStateSchema.parse(checkpoint.state);
+      if (state.clarification?.id !== clarification.id) throw clarificationNotPending();
+      const sequence = conversation.lastMessageSequence + 1;
+      await transaction.insert(conversationMessages).values({
+        id: input.answerMessageId,
+        userId: input.userId,
+        conversationId: input.conversationId,
+        sequence,
+        role: "user",
+        status: "final",
+        contentParts: textContent(input.answer),
+        createdAt: input.occurredAt,
+        finalizedAt: input.occurredAt
+      });
+      await transaction
+        .update(agentClarifications)
+        .set({
+          status: "answered",
+          answer: input.answer,
+          answerMessageId: input.answerMessageId,
+          answeredAt: input.occurredAt
+        })
+        .where(eq(agentClarifications.id, clarification.id));
+      await transaction
+        .update(agentCheckpoints)
+        .set({
+          state: agentAnalysisStateSchema.parse({
+            ...state,
+            phase: "resuming",
+            clarification: {
+              ...state.clarification,
+              status: "answered",
+              answer: input.answer
+            },
+            updatedAt: input.occurredAt.toISOString()
+          }),
+          revision: checkpoint.revision + 1,
+          updatedAt: input.occurredAt
+        })
+        .where(eq(agentCheckpoints.id, checkpoint.id));
+      const [resumed] = await transaction
+        .update(agentRuns)
+        .set({ status: "queued", progressStage: null, updatedAt: input.occurredAt })
+        .where(eq(agentRuns.id, run.id))
+        .returning();
+      const eventSequence = await nextRunEventSequence(transaction, run.id);
+      await insertRunEvent(transaction, {
+        run,
+        sequence: eventSequence,
+        eventType: "run.resumed",
+        payload: { version: 1 },
+        occurredAt: input.occurredAt
+      });
+      await transaction.insert(outboxEvents).values({
+        userId: input.userId,
+        aggregateId: input.runId,
+        eventName: "queue.agent.run.v1",
+        payload: {
+          version: 1,
+          jobName: "agent.run.v1",
+          correlationId: input.correlationId,
+          userId: input.userId,
+          idempotencyKey: clarification.id,
+          conversationId: input.conversationId,
+          runId: input.runId
+        },
+        occurredAt: input.occurredAt
+      });
+      await transaction
+        .update(conversations)
+        .set({
+          lastMessageSequence: sequence,
+          lastActivityAt: input.occurredAt,
+          version: conversation.version + 1,
+          updatedAt: input.occurredAt
+        })
+        .where(eq(conversations.id, conversation.id));
+      return resumed ? mapRun(resumed) : null;
+    });
+  }
+
+  public recordRunProgress(
+    input: Parameters<ConversationRepository["recordRunProgress"]>[0]
+  ): Promise<boolean> {
+    return this.executeForUser(input.userId, async (transaction) => {
+      const [run] = await lockRun(transaction, input);
+      if (!run || run.status !== "running") return false;
+      const sequence = await nextRunEventSequence(transaction, run.id);
+      await transaction
+        .update(agentRuns)
+        .set({
+          progressStage: input.stage,
+          stepCount: input.stepCount,
+          repairCount: input.repairCount,
+          toolCallCount: input.toolCallCount,
+          updatedAt: input.occurredAt
+        })
+        .where(eq(agentRuns.id, run.id));
+      await insertRunEvent(transaction, {
+        run,
+        sequence,
+        eventType: "run.progress",
+        payload: { version: 1, stage: input.stage, message: input.message },
+        occurredAt: input.occurredAt
+      });
+      return true;
+    });
+  }
+
+  public isRunCancelled(
+    input: Parameters<ConversationRepository["isRunCancelled"]>[0]
+  ): Promise<boolean> {
+    return this.executeForUser(input.userId, async (transaction) => {
+      const [run] = await transaction
+        .select({ status: agentRuns.status })
+        .from(agentRuns)
+        .where(
+          and(
+            eq(agentRuns.userId, input.userId),
+            eq(agentRuns.conversationId, input.conversationId),
+            eq(agentRuns.id, input.runId)
+          )
+        )
+        .limit(1);
+      return !run || run.status !== "running";
+    });
+  }
+
   public failRun(input: Parameters<ConversationRepository["failRun"]>[0]): Promise<void> {
     return this.executeForUser(input.userId, async (transaction) => {
       const [run] = await lockRun(transaction, input);
@@ -553,6 +806,7 @@ export class PostgresConversationRepository implements ConversationRepository {
         .update(agentRuns)
         .set({
           status: "failed",
+          progressStage: null,
           failureCode: input.code,
           failureMessage: input.message,
           completedAt: input.occurredAt,
@@ -581,6 +835,7 @@ export class PostgresConversationRepository implements ConversationRepository {
         .update(agentRuns)
         .set({
           status: "cancelled",
+          progressStage: null,
           cancelledAt: input.occurredAt,
           updatedAt: input.occurredAt
         })
@@ -757,7 +1012,7 @@ function mapMessage(row: MessageRow): ConversationMessageView {
   };
 }
 
-function mapRun(row: RunRow): AgentRunView {
+function mapRun(row: RunRow, clarification?: ClarificationRow): AgentRunView {
   return {
     id: row.id,
     conversationId: row.conversationId,
@@ -765,6 +1020,15 @@ function mapRun(row: RunRow): AgentRunView {
     status: row.status,
     failureCode: row.failureCode,
     failureMessage: row.failureMessage,
+    progressStage: row.progressStage as AgentRunView["progressStage"],
+    clarification:
+      clarification?.status === "pending"
+        ? {
+            id: clarification.id,
+            question: clarification.question,
+            options: parseClarificationOptions(clarification.options)
+          }
+        : null,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt
   };
@@ -816,11 +1080,25 @@ function isRunEventType(value: string): value is RunEventType {
   return [
     "run.queued",
     "run.started",
+    "run.progress",
+    "run.clarification",
+    "run.resumed",
     "assistant.delta",
     "run.completed",
     "run.failed",
     "run.cancelled"
   ].includes(value);
+}
+
+function parseClarificationOptions(value: unknown) {
+  return agentClarificationOptionSchema.array().max(8).parse(value);
+}
+
+function clarificationNotPending(): ConversationError {
+  return new ConversationError(
+    "CONVERSATION_CLARIFICATION_NOT_PENDING",
+    "This clarification is no longer awaiting an answer."
+  );
 }
 
 function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {

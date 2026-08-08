@@ -39,6 +39,21 @@ export type AnalysisContextResult =
     }
   | { readonly state: "ready"; readonly context: ReadyAnalysisContext };
 
+export type AnalysisProfileResult =
+  | { readonly state: "no_dataset" }
+  | {
+      readonly state: "not_ready";
+      readonly originalFilename: string;
+      readonly status: string;
+    }
+  | {
+      readonly state: "ready";
+      readonly context: Omit<
+        ReadyAnalysisContext,
+        "objectKey" | "sizeBytes" | "checksumSha256" | "delimiter"
+      >;
+    };
+
 export interface AnalysisReadRepository {
   loadRunContext(input: {
     readonly userId: string;

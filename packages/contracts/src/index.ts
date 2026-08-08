@@ -7,6 +7,7 @@ export {
   analysisFilterSchema,
   analysisMeasureSchema,
   analysisOperationSchema,
+  analysisPlanDraftSchema,
   analysisPlanSchema,
   analysisProvenanceSchema,
   analysisResultArtifactSchema,
@@ -14,6 +15,8 @@ export {
   analysisResultRowSchema,
   analysisResultValueSchema,
   analysisSortSchema,
+  analysisTimeGrainSchema,
+  analysisVisualizationPreferenceSchema,
   chartArtifactSchema,
   chartFieldsMatchResult,
   chartSpecSchema,
@@ -24,6 +27,7 @@ export type {
   AnalysisArtifactBundleContract,
   AnalysisFilterContract,
   AnalysisOperationContract,
+  AnalysisPlanDraftContract,
   AnalysisPlanContract,
   AnalysisProvenanceContract,
   AnalysisResultArtifactContract,
@@ -90,8 +94,33 @@ export type {
   OutboxPublishJobPayload,
   QueueJobName
 } from "./queue";
-export { agentAnalysisOutputSchema, agentAnalysisStateSchema } from "./agent";
-export type { AgentAnalysisOutputContract, AgentAnalysisStateContract } from "./agent";
+export {
+  agentAnalysisOutputSchema,
+  agentAnalysisStateSchema,
+  agentClarificationOptionSchema,
+  agentClarificationSchema,
+  agentColumnContextSchema,
+  agentErrorSchema,
+  agentExplanationSchema,
+  agentGraphPhaseSchema,
+  agentPlanningDecisionModelOutputSchema,
+  agentPlanningDecisionDraftSchema,
+  agentPlanningDecisionSchema,
+  agentProgressStageSchema,
+  queryIntentSchema
+} from "./agent";
+export type {
+  AgentAnalysisOutputContract,
+  AgentAnalysisStateContract,
+  AgentClarificationContract,
+  AgentColumnContextContract,
+  AgentExplanationContract,
+  AgentPlanningDecisionDraftContract,
+  AgentPlanningDecisionContract,
+  AgentPlanningDecisionModelOutputContract,
+  AgentProgressStage,
+  QueryIntent
+} from "./agent";
 export {
   emptyJsonRequestSchema,
   providerCredentialStatusSchema,
@@ -143,12 +172,16 @@ export {
   conversationSummarySchema,
   createConversationRequestSchema,
   runCancelledEventSchema,
+  runClarificationEventSchema,
   runCompletedEventSchema,
   runEventSchema,
   runFailedEventSchema,
+  runProgressEventSchema,
   runQueuedEventSchema,
+  runResumedEventSchema,
   runStartedEventSchema,
   statusMessagePartSchema,
+  submitClarificationRequestSchema,
   submitConversationMessageRequestSchema,
   submitConversationMessageResponseSchema,
   textMessagePartSchema,
@@ -166,6 +199,7 @@ export type {
   ConversationSummaryContract,
   CreateConversationRequest,
   RunEventContract,
+  SubmitClarificationRequest,
   SubmitConversationMessageRequest,
   SubmitConversationMessageResponse,
   UpdateConversationRequest

@@ -152,6 +152,12 @@ content returns `200` with the original message/run IDs. Reuse with different co
 `CONVERSATION_REQUEST_ID_REUSED`. A second request while a run is active returns
 `CONVERSATION_RUN_ACTIVE`.
 
+Clarification submission accepts only `{ "answer": string }`, derives actor ownership from the session,
+requires the standard Origin/Referer and session-bound CSRF controls, and uses the conversation-submission
+rate limit. It atomically appends the answer to the timeline, marks the single pending clarification
+answered, updates the optimistic checkpoint and queues the same run. Repeating the same normalized answer
+is idempotent; a different answer after resume returns `CONVERSATION_CLARIFICATION_NOT_PENDING`.
+
 ## 7. SSE envelope
 
 ```ts
@@ -168,8 +174,10 @@ type RunEvent = {
 Each event type has a versioned, Zod-validated payload schema. Unknown future event types may be
 ignored by clients, but malformed known events are never published.
 
-Phase 4 event types are `run.queued`, `run.started`, `assistant.delta`, `run.completed`, `run.failed`
-and `run.cancelled`. Support `Last-Event-ID` for reconnection, drain paged persisted events before
+Event types are `run.queued`, `run.started`, `run.progress`, `run.clarification`, `run.resumed`,
+`assistant.delta`, `run.completed`, `run.failed` and `run.cancelled`. Progress payloads contain a bounded
+stage and safe user-facing message; clarification payloads contain only the question and bounded options.
+Support `Last-Event-ID` for reconnection, drain paged persisted events before
 closing a terminal stream, and authorize every connection against run ownership. SSE connections are
 bounded in lifetime so EventSource reconnect can refresh the concurrent lease.
 

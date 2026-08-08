@@ -8,8 +8,10 @@ export {
 } from "./cqrs/errors";
 export type { DatasetRepository } from "./ports/dataset-repository";
 export type { EventPublisher } from "./ports/event-publisher";
+export { ObjectStorageError } from "./ports/object-storage";
 export type {
   ObjectStorage,
+  ObjectStorageErrorCode,
   PresignedUpload,
   PresignedUploadRequest,
   StoredObjectMetadata
@@ -87,6 +89,7 @@ export { SecretValue } from "./providers/secret-value";
 export { ConversationError } from "./conversations/conversation-error";
 export type { ConversationErrorCode } from "./conversations/conversation-error";
 export { ConversationRunService } from "./conversations/conversation-run-service";
+export type { ConversationRunFailureDiagnostic } from "./conversations/conversation-run-service";
 export { ConversationService } from "./conversations/conversation-service";
 export type {
   AgentRunView,
@@ -98,6 +101,8 @@ export type {
   ConversationPage,
   ConversationRepository,
   ConversationResponder,
+  ConversationResponderResult,
+  ConversationRunMetrics,
   ConversationRunWork,
   ConversationSubmission,
   RunEventPage,
@@ -116,9 +121,22 @@ export type {
   AnalysisExecutionResult,
   AnalysisPlanner,
   AnalysisPlanningResult,
+  AnalysisProfileResult,
   AnalysisReadRepository,
   ReadyAnalysisContext
 } from "./analysis/ports";
+export { AgentError } from "./agents/agent-error";
+export type { AgentErrorCode } from "./agents/agent-error";
+export { AgentProviderService } from "./agents/agent-provider-service";
+export type { AgentModelSelection } from "./agents/agent-provider-service";
+export type {
+  AgentCheckpointRecord,
+  AgentCheckpointRepository,
+  AgentExplanationModelInput,
+  AgentModelGateway,
+  AgentModelSession,
+  AgentPlanModelInput
+} from "./agents/ports";
 export type {
   AiProvider,
   AiProviderGateway,

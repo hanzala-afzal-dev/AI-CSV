@@ -118,6 +118,19 @@ export async function cancelRun(
   return agentRunSummarySchema.parse(response.data.run);
 }
 
+export async function submitClarification(
+  conversationId: string,
+  runId: string,
+  answer: string
+): Promise<AgentRunSummaryContract> {
+  const response = await authenticatedMutation<Envelope<{ readonly run: unknown }>>(
+    `/api/v1/conversations/${conversationId}/runs/${runId}/clarifications`,
+    "POST",
+    { answer }
+  );
+  return agentRunSummarySchema.parse(response.data.run);
+}
+
 export async function getProviderSettings(): Promise<ProviderSettingsContract> {
   const response = await authenticatedQuery<Envelope<{ readonly settings: unknown }>>(
     "/api/v1/settings/providers/openai"

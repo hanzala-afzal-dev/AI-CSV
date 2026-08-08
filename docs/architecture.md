@@ -14,7 +14,7 @@ flowchart LR
   Worker --> Infra
   Infra --> Postgres[(PostgreSQL)]
   Infra --> Redis[(Redis)]
-  Infra --> S3[(LocalStack S3)]
+  Infra --> S3[(MinIO S3)]
   Infra --> Qdrant[(Qdrant)]
   Worker --> DuckDB[DuckDB in process]
   App --> Contracts[Zod contracts]
@@ -28,7 +28,8 @@ flowchart LR
 - Infrastructure implements ports and owns external clients.
 - Web and worker compose dependencies for delivery.
 - Contracts are framework-neutral Zod schemas.
-- Agent contains LangGraph state and graph composition only.
+- Agent contains LangGraph state/composition and the LangChain model adapter. It invokes application
+  services through ports and never imports infrastructure repositories or performs arbitrary database work.
 
 `pnpm architecture:check` enforces allowed workspace dependencies, prevents framework and
 infrastructure imports in the domain/application layers, and rejects relative imports that cross package
@@ -54,7 +55,7 @@ the domain/application layers.
 
 `GET /api/health` checks only whether the web process is alive.
 
-`GET /api/ready` checks PostgreSQL, Redis, Qdrant, and S3/LocalStack. It returns a
+`GET /api/ready` checks PostgreSQL, Redis, Qdrant, and S3/MinIO. It returns a
 structured body with dependency names and statuses. It must not include credentials,
 signed URLs, raw connection strings, API keys, or passwords.
 
@@ -119,6 +120,23 @@ separate append-only tenant tables. Assistant messages hold only typed artifact 
 revalidates stored chart fields against the result schema and returns an ownership-safe projection without
 object keys, SQL or user IDs. React owns all table and chart rendering; stored data cannot provide JSX or
 executable chart code.
+
+## Agent Orchestration
+
+The worker composes one LangGraph analytical workflow. Trusted application input supplies the actor,
+conversation, run and active dataset boundary. The model receives only the question, bounded schema
+metadata, strict validation feedback and bounded verified result rows. It returns Zod-validated plans and
+explanation references; it cannot return executable SQL, storage paths or authorization context.
+
+The graph checks durable cancellation between nodes and enforces configured step, repair, tool-call and
+result-to-model limits. Obvious material ambiguity is detected from the authorized profile before a model
+request. Every calculation reuses the Phase 6 compiler and DuckDB sandbox, and the final numeric highlights
+are materialized from stored result cells rather than model prose.
+
+Graph checkpoints and clarifications are PostgreSQL tenant resources keyed to one user/conversation/run.
+Optimistic checkpoint revisions prevent concurrent writers. A clarification commits the pending state and
+event; an authenticated CSRF-protected answer appends a user message, updates that checkpoint, and enqueues
+an idempotent continuation of the same run. RAG remains an empty typed context step until Phase 8.
 
 ## Qdrant and PostgreSQL
 

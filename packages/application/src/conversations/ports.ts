@@ -1,4 +1,7 @@
 import type {
+  AgentAnalysisStateContract,
+  AgentClarificationContract,
+  AgentProgressStage,
   AnalysisPlanContract,
   AnalysisProvenanceContract,
   AnalysisResultRowContract,
@@ -40,6 +43,11 @@ export interface AgentRunView {
   readonly status: AgentRunStatus;
   readonly failureCode: string | null;
   readonly failureMessage: string | null;
+  readonly progressStage: AgentProgressStage | null;
+  readonly clarification: Pick<
+    AgentClarificationContract,
+    "id" | "question" | "options"
+  > | null;
   readonly createdAt: Date;
   readonly updatedAt: Date;
 }
@@ -72,6 +80,9 @@ export interface CompletedAnalysis {
 export type RunEventType =
   | "run.queued"
   | "run.started"
+  | "run.progress"
+  | "run.clarification"
+  | "run.resumed"
   | "assistant.delta"
   | "run.completed"
   | "run.failed"
@@ -108,7 +119,29 @@ export interface ConversationRunWork {
   readonly runId: string;
   readonly userMessageId: string;
   readonly content: string;
+  readonly selectedModel: string | null;
+  readonly selectedReasoningEffort: string | null;
 }
+
+export interface ConversationRunMetrics {
+  readonly stepCount: number;
+  readonly repairCount: number;
+  readonly toolCallCount: number;
+}
+
+export type ConversationResponderResult =
+  | {
+      readonly state: "completed";
+      readonly text: string;
+      readonly analysis?: CompletedAnalysis;
+      readonly metrics?: ConversationRunMetrics;
+    }
+  | {
+      readonly state: "waiting_for_user";
+      readonly clarification: AgentClarificationContract;
+      readonly checkpoint: AgentAnalysisStateContract;
+      readonly metrics: ConversationRunMetrics;
+    };
 
 export interface ConversationRepository {
   create(conversation: ConversationProps): Promise<ConversationProps>;
@@ -161,8 +194,42 @@ export interface ConversationRepository {
     readonly assistantText: string;
     readonly analysis?: CompletedAnalysis;
     readonly generatedTitle: string;
+    readonly metrics?: ConversationRunMetrics;
     readonly occurredAt: Date;
   }): Promise<void>;
+  pauseRun(input: {
+    readonly userId: string;
+    readonly conversationId: string;
+    readonly runId: string;
+    readonly clarification: AgentClarificationContract;
+    readonly metrics: ConversationRunMetrics;
+    readonly occurredAt: Date;
+  }): Promise<void>;
+  resumeRun(input: {
+    readonly userId: string;
+    readonly conversationId: string;
+    readonly runId: string;
+    readonly answerMessageId: string;
+    readonly answer: string;
+    readonly correlationId: string;
+    readonly occurredAt: Date;
+  }): Promise<AgentRunView | null>;
+  recordRunProgress(input: {
+    readonly userId: string;
+    readonly conversationId: string;
+    readonly runId: string;
+    readonly stage: AgentProgressStage;
+    readonly message: string;
+    readonly stepCount: number;
+    readonly repairCount: number;
+    readonly toolCallCount: number;
+    readonly occurredAt: Date;
+  }): Promise<boolean>;
+  isRunCancelled(input: {
+    readonly userId: string;
+    readonly conversationId: string;
+    readonly runId: string;
+  }): Promise<boolean>;
   failRun(input: {
     readonly userId: string;
     readonly conversationId: string;
@@ -191,6 +258,10 @@ export interface ConversationResponder {
     readonly userId: string;
     readonly conversationId: string;
     readonly runId: string;
+    readonly userMessageId: string;
+    readonly correlationId: string;
     readonly content: string;
-  }): Promise<{ readonly text: string; readonly analysis?: CompletedAnalysis }>;
+    readonly selectedModel: string | null;
+    readonly selectedReasoningEffort: string | null;
+  }): Promise<ConversationResponderResult>;
 }

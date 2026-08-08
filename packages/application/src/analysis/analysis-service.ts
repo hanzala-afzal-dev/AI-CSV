@@ -6,11 +6,13 @@ import {
   type AnalysisProvenanceContract,
   type ChartSpecContract
 } from "@agentic-csv/contracts";
-import type { ObjectStorage } from "../ports/object-storage";
+import { ObjectStorageError, type ObjectStorage } from "../ports/object-storage";
 import type { CompletedAnalysis } from "../conversations/ports";
+import { AnalysisError } from "./analysis-error";
 import type {
   AnalysisEngine,
   AnalysisPlanner,
+  AnalysisProfileResult,
   AnalysisReadRepository,
   ReadyAnalysisContext
 } from "./ports";
@@ -30,6 +32,28 @@ export class AnalysisService {
     private readonly now: () => Date = () => new Date(),
     private readonly createId: () => string = createUuidV7
   ) {}
+
+  public async loadProfile(input: {
+    readonly userId: string;
+    readonly conversationId: string;
+    readonly runId: string;
+  }): Promise<AnalysisProfileResult> {
+    const loaded = await this.repository.loadRunContext(input);
+    if (loaded.state !== "ready") return loaded;
+    return {
+      state: "ready",
+      context: {
+        userId: loaded.context.userId,
+        conversationId: loaded.context.conversationId,
+        runId: loaded.context.runId,
+        datasetId: loaded.context.datasetId,
+        datasetVersionId: loaded.context.datasetVersionId,
+        datasetName: loaded.context.datasetName,
+        originalFilename: loaded.context.originalFilename,
+        columns: loaded.context.columns
+      }
+    };
+  }
 
   public async analyze(input: {
     readonly userId: string;
@@ -56,15 +80,40 @@ export class AnalysisService {
       return { handled: true, text: planned.message };
     }
 
-    const content = await this.storage.readObject(loaded.context.objectKey);
+    return this.executeLoaded(loaded.context, planned.plan);
+  }
+
+  public async executePlan(input: {
+    readonly userId: string;
+    readonly conversationId: string;
+    readonly runId: string;
+    readonly question: string;
+    readonly plan: AnalysisPlanContract;
+  }): Promise<AnalysisServiceResult> {
+    const loaded = await this.repository.loadRunContext(input);
+    if (loaded.state === "no_dataset") return { handled: false, text: "" };
+    if (loaded.state === "not_ready") {
+      return {
+        handled: true,
+        text: `${loaded.originalFilename} is still ${loaded.status.replaceAll("_", " ")}. Analysis will be available after profiling completes.`
+      };
+    }
+    return this.executeLoaded(loaded.context, input.plan);
+  }
+
+  private async executeLoaded(
+    context: ReadyAnalysisContext,
+    plan: AnalysisPlanContract
+  ): Promise<AnalysisServiceResult> {
+    const content = await readAnalysisSource(this.storage, context.objectKey);
     const executed = await this.engine.execute({
-      context: loaded.context,
-      plan: planned.plan,
+      context,
+      plan,
       content
     });
     const createdAt = this.now();
-    const provenance = createProvenance(loaded.context, planned.plan, executed);
-    const chartSpec = selectChart(planned.plan, executed.schema, executed.rows.length, [
+    const provenance = createProvenance(context, plan, executed);
+    const chartSpec = selectChart(plan, executed.schema, executed.rows.length, [
       ...executed.warnings,
       ...(executed.truncated ? ["The displayed result is truncated."] : [])
     ]);
@@ -75,9 +124,9 @@ export class AnalysisService {
       planId: this.createId(),
       resultId: this.createId(),
       chartArtifactId: this.createId(),
-      datasetId: loaded.context.datasetId,
-      datasetVersionId: loaded.context.datasetVersionId,
-      plan: planned.plan,
+      datasetId: context.datasetId,
+      datasetVersionId: context.datasetVersionId,
+      plan,
       planHash: executed.planHash,
       schema: [...executed.schema],
       rows: [...executed.rows],
@@ -91,9 +140,32 @@ export class AnalysisService {
     };
     return {
       handled: true,
-      text: explainResult(loaded.context, planned.plan, analysis),
+      text: explainResult(context, plan, analysis),
       analysis
     };
+  }
+}
+
+async function readAnalysisSource(
+  storage: ObjectStorage,
+  objectKey: string
+): Promise<AsyncIterable<Uint8Array>> {
+  try {
+    return await storage.readObject(objectKey);
+  } catch (error) {
+    if (error instanceof ObjectStorageError) {
+      if (error.code === "OBJECT_NOT_FOUND") {
+        throw new AnalysisError(
+          "ANALYSIS_SOURCE_MISSING",
+          "The attached CSV is no longer available. Upload it again and attach the new dataset."
+        );
+      }
+      throw new AnalysisError(
+        "ANALYSIS_SOURCE_UNAVAILABLE",
+        "The CSV storage service is temporarily unavailable. Try again later."
+      );
+    }
+    throw error;
   }
 }
 

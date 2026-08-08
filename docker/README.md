@@ -52,6 +52,10 @@ have been stored, or those credentials will no longer decrypt. Intentional key r
 `APP_ENCRYPTION_KEY_VERSION` and retain the old version and key in `APP_ENCRYPTION_PREVIOUS_KEYS` until all
 stored credentials have been re-encrypted.
 
+MinIO stores uploaded CSV objects directly in the `minio-data` named volume mounted at `/data`.
+Stopping and starting the existing container therefore retains uploaded CSV objects. `pnpm docker:reset`
+still deletes that volume intentionally; datasets must be uploaded again after a reset.
+
 ## Phase 4 environment upgrade
 
 Existing checkouts must also merge the conversation protection defaults from `.env.example` into the
@@ -86,9 +90,9 @@ RATE_LIMIT_UPLOAD_INTENT_MAX_REQUESTS=10
 RATE_LIMIT_UPLOAD_COMPLETION_MAX_REQUESTS=20
 ```
 
-If `docker/stack.yml` predates Phase 5, merge the `APP_URL` environment entry for `localstack` from the
-tracked `docker/docker-compose.yml.example`. This configures direct browser-upload CORS for the trusted
-application origin.
+If `docker/stack.yml` predates durable local object storage, refresh the `minio` and `minio-init` services
+from the tracked `docker/docker-compose.yml.example`. MinIO receives the trusted application origin for
+direct browser-upload CORS, while the one-shot init service creates and versions the development bucket.
 
 Phase 5 adds a dedicated native DuckDB export used only by the worker. Existing checkouts need one
 targeted worker image build, then a normal Compose reconciliation to apply migration `0009` and the new
@@ -106,6 +110,35 @@ This does not rebuild the web image. Once the worker image contains the Phase 5 
 edits under the mounted source directories are rebuilt by the existing watchers and daily stop/start does
 not build or recreate containers. Manual browser verification is documented in
 [`docs/phase-5-e2e.md`](../docs/phase-5-e2e.md).
+
+## Phase 7 environment upgrade
+
+Merge the bounded agent runtime defaults from `.env.example` into the root `.env`:
+
+```dotenv
+AGENT_PROVIDER_TIMEOUT_MS=60000
+AGENT_MAX_STEPS=20
+AGENT_MAX_REPAIRS=2
+AGENT_MAX_TOOL_CALLS=12
+AGENT_MAX_RESULT_ROWS_TO_MODEL=200
+```
+
+Phase 7 adds the agent package as a direct worker dependency. Existing checkouts need one targeted worker
+image build so the container receives that workspace link, followed by a normal Compose reconciliation to
+apply migration `0011`:
+
+```bash
+pnpm env:check
+pnpm docker:config
+docker compose --env-file .env -f docker/compose.yaml --profile app build worker
+pnpm docker:up
+pnpm docker:ps
+```
+
+Also merge the `packages/agent/src` and `packages/agent/tsconfig.json` worker mounts from the tracked
+Compose template if the ignored `docker/stack.yml` predates Phase 7. Those mounts let Turbo rebuild agent
+source edits inside the existing worker container. Further Phase 7 source changes and normal daily starts
+do not require another image build.
 
 Run normal lifecycle commands from the repository root:
 

@@ -7,11 +7,12 @@ import {
   S3Client
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-import type {
-  ObjectStorage,
-  PresignedUpload,
-  PresignedUploadRequest,
-  StoredObjectMetadata
+import {
+  ObjectStorageError,
+  type ObjectStorage,
+  type PresignedUpload,
+  type PresignedUploadRequest,
+  type StoredObjectMetadata
 } from "@agentic-csv/application";
 import type { AppEnv } from "../config/env";
 
@@ -72,6 +73,8 @@ export class S3ObjectStorage implements ObjectStorage {
     request: PresignedUploadRequest
   ): Promise<PresignedUpload> {
     const objectKey = this.createObjectKey(request);
+    const checksumHeader = "x-amz-checksum-sha256";
+    const uploadIntentHeader = "x-amz-meta-upload-intent-id";
     const command = new PutObjectCommand({
       Bucket: this.bucket,
       Key: objectKey,
@@ -81,7 +84,9 @@ export class S3ObjectStorage implements ObjectStorage {
       Metadata: { "upload-intent-id": request.uploadIntentId }
     });
     const uploadUrl = await getSignedUrl(this.presignClient, command, {
-      expiresIn: request.expiresInSeconds
+      expiresIn: request.expiresInSeconds,
+      signableHeaders: new Set(["content-type"]),
+      unhoistableHeaders: new Set([checksumHeader, uploadIntentHeader])
     });
 
     return {
@@ -89,21 +94,26 @@ export class S3ObjectStorage implements ObjectStorage {
       uploadUrl,
       requiredHeaders: {
         "content-type": request.contentType,
-        "x-amz-checksum-sha256": request.checksumSha256,
-        "x-amz-meta-upload-intent-id": request.uploadIntentId
+        [checksumHeader]: request.checksumSha256,
+        [uploadIntentHeader]: request.uploadIntentId
       },
       expiresAt: new Date(Date.now() + request.expiresInSeconds * 1000)
     };
   }
 
   public async inspectObject(objectKey: string): Promise<StoredObjectMetadata> {
-    const response = await this.client.send(
-      new HeadObjectCommand({
-        Bucket: this.bucket,
-        Key: objectKey,
-        ChecksumMode: "ENABLED"
-      })
-    );
+    let response;
+    try {
+      response = await this.client.send(
+        new HeadObjectCommand({
+          Bucket: this.bucket,
+          Key: objectKey,
+          ChecksumMode: "ENABLED"
+        })
+      );
+    } catch (error) {
+      throw objectStorageFailure(error);
+    }
 
     return {
       sizeBytes: response.ContentLength ?? -1,
@@ -116,15 +126,45 @@ export class S3ObjectStorage implements ObjectStorage {
   }
 
   public async readObject(objectKey: string): Promise<AsyncIterable<Uint8Array>> {
-    const response = await this.client.send(
-      new GetObjectCommand({ Bucket: this.bucket, Key: objectKey })
-    );
+    let response;
+    try {
+      response = await this.client.send(
+        new GetObjectCommand({ Bucket: this.bucket, Key: objectKey })
+      );
+    } catch (error) {
+      throw objectStorageFailure(error);
+    }
     const body = response.Body;
     if (!body || !(Symbol.asyncIterator in body)) {
       throw new Error("Stored object did not provide a readable body.");
     }
     return body as AsyncIterable<Uint8Array>;
   }
+}
+
+function objectStorageFailure(error: unknown): ObjectStorageError {
+  if (error instanceof ObjectStorageError) return error;
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    (("name" in error &&
+      typeof error.name === "string" &&
+      ["NoSuchKey", "NotFound", "NoSuchBucket"].includes(error.name)) ||
+      ("$metadata" in error &&
+        typeof error.$metadata === "object" &&
+        error.$metadata !== null &&
+        "httpStatusCode" in error.$metadata &&
+        error.$metadata.httpStatusCode === 404))
+  ) {
+    return new ObjectStorageError(
+      "OBJECT_NOT_FOUND",
+      "The requested object was not found."
+    );
+  }
+  return new ObjectStorageError(
+    "OBJECT_UNAVAILABLE",
+    "The object storage request could not be completed."
+  );
 }
 
 function requireUuidPathSegment(value: string, field: string): string {

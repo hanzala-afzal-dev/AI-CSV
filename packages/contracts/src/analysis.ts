@@ -61,110 +61,121 @@ export const analysisSortSchema = z
   })
   .strict();
 
-export const analysisPlanSchema = z
+export const analysisTimeGrainSchema = z.enum([
+  "day",
+  "week",
+  "month",
+  "quarter",
+  "year"
+]);
+
+export const analysisVisualizationPreferenceSchema = z.enum([
+  "auto",
+  "none",
+  "table",
+  "bar",
+  "line",
+  "pie",
+  "scatter"
+]);
+
+export const analysisPlanDraftSchema = z
   .object({
     version: z.literal(1),
     operation: analysisOperationSchema,
     dimensions: z.array(analysisColumnRefSchema).max(8),
     measures: z.array(analysisMeasureSchema).max(16),
     filters: z.array(analysisFilterSchema).max(16),
-    timeGrain: z.enum(["day", "week", "month", "quarter", "year"]).optional(),
+    timeGrain: analysisTimeGrainSchema.optional(),
     sort: z.array(analysisSortSchema).max(4),
     limit: z.number().int().min(1).max(500),
-    visualizationPreference: z.enum([
-      "auto",
-      "none",
-      "table",
-      "bar",
-      "line",
-      "pie",
-      "scatter"
-    ]),
+    visualizationPreference: analysisVisualizationPreferenceSchema,
     assumptions: z.array(z.string().trim().min(1).max(500)).max(16)
   })
-  .strict()
-  .superRefine((plan, context) => {
-    const issue = (path: (string | number)[], message: string) =>
-      context.addIssue({ code: "custom", path, message });
-    if (plan.measures.length === 0 && plan.operation !== "lookup") {
-      issue(["measures"], "The operation requires at least one measure.");
-    }
-    if (plan.operation !== "lookup" && plan.dimensions.length > 4) {
-      issue(["dimensions"], "Analytical operations support at most four dimensions.");
-    }
-    if (plan.operation !== "trend" && plan.timeGrain !== undefined) {
-      issue(["timeGrain"], "Only trend operations may specify a time grain.");
-    }
-    if (plan.operation === "aggregate" && plan.dimensions.length !== 0) {
-      issue(["dimensions"], "An aggregate operation cannot group by dimensions.");
-    }
-    if (plan.operation === "compare" && plan.dimensions.length === 0) {
-      issue(["dimensions"], "A comparison requires at least one dimension.");
-    }
-    if (plan.operation === "distribution") {
-      if (plan.dimensions.length !== 1) {
-        issue(["dimensions"], "A distribution requires exactly one dimension.");
-      }
-      if (
-        plan.measures.length !== 1 ||
-        !["count", "count_distinct"].includes(plan.measures[0]?.aggregation ?? "")
-      ) {
-        issue(["measures"], "A distribution requires one count measure.");
-      }
-    }
-    if (plan.operation === "correlate") {
-      if (
-        plan.measures.length !== 2 ||
-        plan.measures.some(
-          (measure) => measure.columnId === null || measure.aggregation !== "value"
-        )
-      ) {
-        issue(["measures"], "Correlation requires exactly two value measures.");
-      }
-      if (plan.dimensions.length !== 0) {
-        issue(["dimensions"], "Correlation does not accept grouping dimensions.");
-      }
-      if (plan.sort.length !== 0) {
-        issue(["sort"], "Correlation does not accept result sorting.");
-      }
-    }
-    if (plan.operation === "trend" && (!plan.timeGrain || plan.dimensions.length !== 1)) {
-      issue(["timeGrain"], "A trend requires one time dimension and a time grain.");
+  .strict();
+
+export const analysisPlanSchema = analysisPlanDraftSchema.superRefine((plan, context) => {
+  const issue = (path: (string | number)[], message: string) =>
+    context.addIssue({ code: "custom", path, message });
+  if (plan.measures.length === 0 && plan.operation !== "lookup") {
+    issue(["measures"], "The operation requires at least one measure.");
+  }
+  if (plan.operation !== "lookup" && plan.dimensions.length > 4) {
+    issue(["dimensions"], "Analytical operations support at most four dimensions.");
+  }
+  if (plan.operation !== "trend" && plan.timeGrain !== undefined) {
+    issue(["timeGrain"], "Only trend operations may specify a time grain.");
+  }
+  if (plan.operation === "aggregate" && plan.dimensions.length !== 0) {
+    issue(["dimensions"], "An aggregate operation cannot group by dimensions.");
+  }
+  if (plan.operation === "compare" && plan.dimensions.length === 0) {
+    issue(["dimensions"], "A comparison requires at least one dimension.");
+  }
+  if (plan.operation === "distribution") {
+    if (plan.dimensions.length !== 1) {
+      issue(["dimensions"], "A distribution requires exactly one dimension.");
     }
     if (
-      ["aggregate", "compare", "trend", "distribution", "quality"].includes(
-        plan.operation
-      ) &&
-      plan.measures.some((measure) => measure.aggregation === "value")
+      plan.measures.length !== 1 ||
+      !["count", "count_distinct"].includes(plan.measures[0]?.aggregation ?? "")
     ) {
-      issue(["measures"], "This operation requires aggregate measures.");
+      issue(["measures"], "A distribution requires one count measure.");
     }
-    if (plan.operation === "quality") {
-      if (plan.dimensions.length !== 0) {
-        issue(["dimensions"], "A quality check cannot group by dimensions.");
-      }
-      if (plan.measures.some((measure) => measure.aggregation !== "null_count")) {
-        issue(["measures"], "A quality check accepts only missing-value measures.");
-      }
+  }
+  if (plan.operation === "correlate") {
+    if (
+      plan.measures.length !== 2 ||
+      plan.measures.some(
+        (measure) => measure.columnId === null || measure.aggregation !== "value"
+      )
+    ) {
+      issue(["measures"], "Correlation requires exactly two value measures.");
     }
-    if (plan.operation === "lookup") {
-      if (plan.dimensions.length === 0) {
-        issue(["dimensions"], "A row lookup requires at least one selected column.");
-      }
-      if (plan.measures.length !== 0) {
-        issue(["measures"], "A row lookup cannot include aggregate measures.");
-      }
+    if (plan.dimensions.length !== 0) {
+      issue(["dimensions"], "Correlation does not accept grouping dimensions.");
     }
-    for (const [index, measure] of plan.measures.entries()) {
-      if (measure.columnId === null && measure.aggregation !== "count") {
-        context.addIssue({
-          code: "custom",
-          path: ["measures", index, "columnId"],
-          message: "Only row count may omit a column."
-        });
-      }
+    if (plan.sort.length !== 0) {
+      issue(["sort"], "Correlation does not accept result sorting.");
     }
-  });
+  }
+  if (plan.operation === "trend" && (!plan.timeGrain || plan.dimensions.length !== 1)) {
+    issue(["timeGrain"], "A trend requires one time dimension and a time grain.");
+  }
+  if (
+    ["aggregate", "compare", "trend", "distribution", "quality"].includes(
+      plan.operation
+    ) &&
+    plan.measures.some((measure) => measure.aggregation === "value")
+  ) {
+    issue(["measures"], "This operation requires aggregate measures.");
+  }
+  if (plan.operation === "quality") {
+    if (plan.dimensions.length !== 0) {
+      issue(["dimensions"], "A quality check cannot group by dimensions.");
+    }
+    if (plan.measures.some((measure) => measure.aggregation !== "null_count")) {
+      issue(["measures"], "A quality check accepts only missing-value measures.");
+    }
+  }
+  if (plan.operation === "lookup") {
+    if (plan.dimensions.length === 0) {
+      issue(["dimensions"], "A row lookup requires at least one selected column.");
+    }
+    if (plan.measures.length !== 0) {
+      issue(["measures"], "A row lookup cannot include aggregate measures.");
+    }
+  }
+  for (const [index, measure] of plan.measures.entries()) {
+    if (measure.columnId === null && measure.aggregation !== "count") {
+      context.addIssue({
+        code: "custom",
+        path: ["measures", index, "columnId"],
+        message: "Only row count may omit a column."
+      });
+    }
+  }
+});
 
 export const resultColumnSchema = z
   .object({
@@ -292,6 +303,7 @@ export const analysisResultResponseSchema = z
 export type AnalysisOperationContract = z.infer<typeof analysisOperationSchema>;
 export type AnalysisAggregationContract = z.infer<typeof analysisAggregationSchema>;
 export type AnalysisFilterContract = z.infer<typeof analysisFilterSchema>;
+export type AnalysisPlanDraftContract = z.infer<typeof analysisPlanDraftSchema>;
 export type AnalysisPlanContract = z.infer<typeof analysisPlanSchema>;
 export type ResultColumnContract = z.infer<typeof resultColumnSchema>;
 export type AnalysisResultRowContract = z.infer<typeof analysisResultRowSchema>;

@@ -51,6 +51,107 @@ describeIntegration("conversation repository and RLS", () => {
     expect((await app.query(`select id from messages`)).rows).toEqual([]);
     expect((await app.query(`select id from agent_runs`)).rows).toEqual([]);
     expect((await app.query(`select run_id from run_events`)).rows).toEqual([]);
+    expect((await app.query(`select id from agent_checkpoints`)).rows).toEqual([]);
+    expect((await app.query(`select id from agent_clarifications`)).rows).toEqual([]);
+  });
+
+  it("isolates Phase 7 checkpoints and clarifications and keeps ownership immutable", async () => {
+    const aliceRun = await repository.enqueueMessage({
+      userId: aliceId,
+      conversationId: aliceConversationId,
+      messageId: randomUUID(),
+      runId: randomUUID(),
+      clientRequestId: randomUUID(),
+      content: "Alice analysis",
+      correlationId: randomUUID(),
+      occurredAt: now
+    });
+    const bobRun = await repository.enqueueMessage({
+      userId: bobId,
+      conversationId: bobConversationId,
+      messageId: randomUUID(),
+      runId: randomUUID(),
+      clientRequestId: randomUUID(),
+      content: "Bob analysis",
+      correlationId: randomUUID(),
+      occurredAt: now
+    });
+    const aliceCheckpointId = randomUUID();
+    const bobCheckpointId = randomUUID();
+    const aliceClarificationId = randomUUID();
+    const bobClarificationId = randomUUID();
+    await admin.query(
+      `insert into agent_checkpoints
+         (id, user_id, conversation_id, run_id, state)
+       values ($1, $2, $3, $4, $5::jsonb), ($6, $7, $8, $9, $10::jsonb)`,
+      [
+        aliceCheckpointId,
+        aliceId,
+        aliceConversationId,
+        aliceRun.runId,
+        JSON.stringify(checkpointState(aliceId, aliceConversationId, aliceRun.runId)),
+        bobCheckpointId,
+        bobId,
+        bobConversationId,
+        bobRun.runId,
+        JSON.stringify(checkpointState(bobId, bobConversationId, bobRun.runId))
+      ]
+    );
+    await admin.query(
+      `insert into agent_clarifications
+         (id, user_id, conversation_id, run_id, question, options, status, asked_at)
+       values ($1, $2, $3, $4, 'Alice question', '[]'::jsonb, 'pending', $5),
+              ($6, $7, $8, $9, 'Bob question', '[]'::jsonb, 'pending', $5)`,
+      [
+        aliceClarificationId,
+        aliceId,
+        aliceConversationId,
+        aliceRun.runId,
+        now,
+        bobClarificationId,
+        bobId,
+        bobConversationId,
+        bobRun.runId
+      ]
+    );
+
+    const client = await app.connect();
+    try {
+      const checkpoints = await asActor(client, aliceId, () =>
+        client.query(`select id from agent_checkpoints order by id`)
+      );
+      const clarifications = await asActor(client, aliceId, () =>
+        client.query(`select id from agent_clarifications order by id`)
+      );
+      expect(checkpoints.rows).toEqual([{ id: aliceCheckpointId }]);
+      expect(clarifications.rows).toEqual([{ id: aliceClarificationId }]);
+
+      const hiddenUpdate = await asActor(client, aliceId, () =>
+        client.query(
+          `update agent_checkpoints set revision = revision + 1 where id = $1`,
+          [bobCheckpointId]
+        )
+      );
+      expect(hiddenUpdate.rowCount).toBe(0);
+      await expect(
+        asActor(client, aliceId, () =>
+          client.query(`update agent_checkpoints set run_id = $1 where id = $2`, [
+            randomUUID(),
+            aliceCheckpointId
+          ])
+        )
+      ).rejects.toMatchObject({ code: "42501" });
+      await expect(
+        asActor(client, aliceId, () =>
+          client.query(
+            `update agent_clarifications set question = 'Changed' where id = $1`,
+            [aliceClarificationId]
+          )
+        )
+      ).rejects.toMatchObject({ code: "42501" });
+    } finally {
+      client.release();
+    }
   });
 
   it("lists and reads only the actor's conversations", async () => {
@@ -98,7 +199,7 @@ describeIntegration("conversation repository and RLS", () => {
             `insert into messages
                (id, user_id, conversation_id, sequence, role, status,
                 content_parts, created_at, finalized_at)
-             values ($1, $2, $3, 1, 'user', 'final', $4::jsonb, $5, $5)`,
+             values ($1, $2, $3, 999, 'user', 'final', $4::jsonb, $5, $5)`,
             [
               randomUUID(),
               aliceId,
@@ -388,4 +489,8 @@ async function asActor<TResult>(
 
 function textContent(text: string) {
   return { version: 1, parts: [{ type: "text", text }] };
+}
+
+function checkpointState(userId: string, conversationId: string, runId: string) {
+  return { version: 1, userId, conversationId, runId };
 }

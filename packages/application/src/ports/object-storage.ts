@@ -26,6 +26,18 @@ export interface StoredObjectMetadata {
   readonly datasetVersionId: string | null;
 }
 
+export type ObjectStorageErrorCode = "OBJECT_NOT_FOUND" | "OBJECT_UNAVAILABLE";
+
+export class ObjectStorageError extends Error {
+  public constructor(
+    public readonly code: ObjectStorageErrorCode,
+    message: string
+  ) {
+    super(message);
+    this.name = "ObjectStorageError";
+  }
+}
+
 export interface ObjectStorage {
   isReady(): Promise<boolean>;
   createObjectKey(input: {
