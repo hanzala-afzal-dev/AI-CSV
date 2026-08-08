@@ -21,7 +21,7 @@
     "@agentic-csv/application": "workspace:*",
     "@agentic-csv/contracts": "workspace:*",
     "@agentic-csv/domain": "workspace:*",
-    "@langchain/core": "1.2.1",
+    "@langchain/core": "1.2.5",
     "@langchain/langgraph": "1.4.7",
     "@langchain/openai": "1.5.3",
     "zod": "4.4.3"
