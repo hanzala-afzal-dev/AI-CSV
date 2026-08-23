@@ -36,6 +36,7 @@ export async function POST(
       conversationId,
       runId,
       answer: body.answer,
+      saveAsDatasetDefinition: body.saveAsDatasetDefinition,
       correlationId: context.correlationId
     });
     return conversationResponse({ run: safeRun(run) }, context.correlationId, 202, {

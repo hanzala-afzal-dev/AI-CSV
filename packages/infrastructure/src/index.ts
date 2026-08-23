@@ -17,6 +17,8 @@ export type { RedisClient, RedisConnectionOptions } from "./redis/client";
 export {
   createAgentRunQueue,
   createDatasetIngestionQueue,
+  createKnowledgeDeleteQueue,
+  createKnowledgeIndexQueue,
   defaultJobOptions,
   queueNames,
   queueOptions
@@ -34,7 +36,8 @@ export { createS3Client, S3ObjectStorage } from "./storage/s3-object-storage";
 export {
   createQdrantClient,
   ensureKnowledgeCollection,
-  isQdrantReady
+  isQdrantReady,
+  QdrantSemanticVectorStore
 } from "./vector/qdrant";
 export {
   checkPostgres,
@@ -61,3 +64,7 @@ export {
 export { PostgresDatasetRepository } from "./datasets";
 export { PostgresAnalysisRepository } from "./analytics/postgres-analysis-repository";
 export { PostgresAgentCheckpointRepository } from "./agents/postgres-agent-checkpoint-repository";
+export { PostgresMemoryRepository } from "./memory/postgres-memory-repository";
+export { OpenAiEmbeddingProvider } from "./memory/openai-embedding-provider";
+export type { OpenAiEmbeddingProviderConfig } from "./memory/openai-embedding-provider";
+export { RedisMemoryRetrievalCache } from "./memory/redis-memory-cache";

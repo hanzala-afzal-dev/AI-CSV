@@ -1,29 +1,40 @@
 import { Worker } from "bullmq";
+import { resolve } from "node:path";
 import {
   AgentProviderService,
   AnalysisService,
   ConversationRunService,
   DatasetIngestionService,
-  DeterministicAnalysisPlanner
+  DeterministicAnalysisPlanner,
+  MemoryDeletionService,
+  MemoryIndexingService,
+  MemoryRetrievalService
 } from "@agentic-csv/application";
 import {
   LangChainOpenAiAgentGateway,
-  LangGraphConversationResponder
+  LangGraphConversationResponder,
+  loadTrustedAgentPolicies
 } from "@agentic-csv/agent";
 import {
   AesGcmCredentialCipher,
   createBullMqConnectionOptions,
   createDatabaseClient,
-  createS3Client,
   createLogger,
   createPgPool,
+  createQdrantClient,
+  createRedisClient,
+  createS3Client,
   loadEnv,
+  OpenAiEmbeddingProvider,
   OutboxDispatcher,
   PostgresAnalysisRepository,
   PostgresAgentCheckpointRepository,
-  PostgresDatasetRepository,
   PostgresConversationRepository,
+  PostgresDatasetRepository,
+  PostgresMemoryRepository,
   PostgresProviderSettingsRepository,
+  QdrantSemanticVectorStore,
+  RedisMemoryRetrievalCache,
   S3ObjectStorage,
   queueNames
 } from "@agentic-csv/infrastructure";
@@ -33,9 +44,14 @@ import {
 } from "@agentic-csv/infrastructure/analytics";
 import { processAgentRunJob } from "./processors/agent-run.processor";
 import { processDatasetIngestionJob } from "./processors/dataset-ingestion.processor";
+import { processKnowledgeDeleteJob } from "./processors/knowledge-delete.processor";
+import { processKnowledgeIndexJob } from "./processors/knowledge-index.processor";
 
 const env = loadEnv();
 const logger = createLogger(env).child({ serviceProcess: "worker" });
+const trustedAgentPolicy = await loadTrustedAgentPolicies(
+  resolve(import.meta.dirname, "../../../knowledge-base")
+);
 const pool = createPgPool(env);
 const database = createDatabaseClient(pool);
 const outboxDispatcher = new OutboxDispatcher(database, env, logger);
@@ -50,6 +66,49 @@ const credentialCipher = new AesGcmCredentialCipher({
     ? {}
     : { previousKeys: env.APP_ENCRYPTION_PREVIOUS_KEYS })
 });
+const providerSettingsRepository = new PostgresProviderSettingsRepository(database);
+const memoryRepository = new PostgresMemoryRepository(database);
+const memoryRedis = createRedisClient(env);
+const embeddingProvider = new OpenAiEmbeddingProvider(
+  providerSettingsRepository,
+  credentialCipher,
+  {
+    baseUrl: env.OPENAI_API_BASE_URL,
+    modelId: env.OPENAI_EMBEDDING_MODEL,
+    vectorSize: env.QDRANT_VECTOR_SIZE,
+    timeoutMs: env.MEMORY_EMBEDDING_TIMEOUT_MS,
+    maxInputCharacters: env.MEMORY_EMBEDDING_MAX_CHARACTERS
+  }
+);
+const semanticVectors = new QdrantSemanticVectorStore(
+  createQdrantClient(env),
+  env.QDRANT_COLLECTION,
+  env.QDRANT_VECTOR_SIZE
+);
+const memoryRetrieval = new MemoryRetrievalService(
+  memoryRepository,
+  embeddingProvider,
+  semanticVectors,
+  new RedisMemoryRetrievalCache(
+    memoryRedis,
+    env.REDIS_KEY_PREFIX,
+    env.AUTH_SECRET,
+    env.MEMORY_CACHE_TTL_SECONDS
+  ),
+  {
+    topK: env.MEMORY_RETRIEVAL_TOP_K,
+    scoreThreshold: env.MEMORY_RETRIEVAL_SCORE_THRESHOLD,
+    maxContextCharacters: env.MEMORY_MAX_CONTEXT_CHARACTERS
+  },
+  (error) => logger.warn({ error }, "semantic memory retrieval degraded")
+);
+const memoryIndexing = new MemoryIndexingService(
+  memoryRepository,
+  embeddingProvider,
+  semanticVectors,
+  { batchSize: env.MEMORY_EMBEDDING_BATCH_SIZE }
+);
+const memoryDeletion = new MemoryDeletionService(semanticVectors);
 const datasetIngestionService = new DatasetIngestionService(
   datasetRepository,
   objectStorage,
@@ -82,11 +141,12 @@ const conversationRunService = new ConversationRunService(
   new LangGraphConversationResponder(
     analysisService,
     new AgentProviderService(
-      new PostgresProviderSettingsRepository(database),
+      providerSettingsRepository,
       credentialCipher,
       new LangChainOpenAiAgentGateway({
         baseUrl: env.OPENAI_API_BASE_URL,
         timeoutMs: env.AGENT_PROVIDER_TIMEOUT_MS,
+        trustedPolicy: trustedAgentPolicy,
         onProviderError: (providerError) =>
           logger.warn({ providerError }, "OpenAI analytical request failed")
       })
@@ -98,7 +158,10 @@ const conversationRunService = new ConversationRunService(
       maxRepairs: env.AGENT_MAX_REPAIRS,
       maxToolCalls: env.AGENT_MAX_TOOL_CALLS,
       maxResultRowsToModel: env.AGENT_MAX_RESULT_ROWS_TO_MODEL
-    }
+    },
+    undefined,
+    undefined,
+    memoryRetrieval
   ),
   undefined,
   undefined,
@@ -120,6 +183,26 @@ const datasetWorker = new Worker(
 const agentRunWorker = new Worker(
   queueNames.agentRun,
   async (job) => processAgentRunJob(job, conversationRunService, logger),
+  {
+    connection: createBullMqConnectionOptions(env.REDIS_URL),
+    concurrency: env.WORKER_CONCURRENCY,
+    prefix: env.QUEUE_PREFIX
+  }
+);
+
+const knowledgeIndexWorker = new Worker(
+  queueNames.knowledgeIndexing,
+  async (job) => processKnowledgeIndexJob(job, memoryIndexing, logger),
+  {
+    connection: createBullMqConnectionOptions(env.REDIS_URL),
+    concurrency: env.WORKER_CONCURRENCY,
+    prefix: env.QUEUE_PREFIX
+  }
+);
+
+const knowledgeDeleteWorker = new Worker(
+  queueNames.knowledgeDeletion,
+  async (job) => processKnowledgeDeleteJob(job, memoryDeletion, logger),
   {
     connection: createBullMqConnectionOptions(env.REDIS_URL),
     concurrency: env.WORKER_CONCURRENCY,
@@ -218,6 +301,90 @@ agentRunWorker.on("error", (error) => {
   );
 });
 
+knowledgeIndexWorker.on("active", (job) => {
+  logger.info(
+    { queue: queueNames.knowledgeIndexing, jobId: job.id, jobName: job.name },
+    "job started"
+  );
+});
+
+knowledgeIndexWorker.on("completed", (job) => {
+  logger.info(
+    { queue: queueNames.knowledgeIndexing, jobId: job.id, jobName: job.name },
+    "job completed"
+  );
+});
+
+knowledgeIndexWorker.on("failed", (job, error) => {
+  const attempts = typeof job?.opts.attempts === "number" ? job.opts.attempts : 1;
+  const willRetry = Boolean(job && job.attemptsMade < attempts);
+  const log = willRetry ? logger.warn.bind(logger) : logger.error.bind(logger);
+  log(
+    {
+      queue: queueNames.knowledgeIndexing,
+      jobId: job?.id,
+      jobName: job?.name,
+      correlationId: readCorrelationId(job?.data),
+      attempt: job?.attemptsMade,
+      willRetry,
+      error: { name: error.name, message: error.message }
+    },
+    "job failed"
+  );
+});
+
+knowledgeIndexWorker.on("error", (error) => {
+  logger.error(
+    {
+      queue: queueNames.knowledgeIndexing,
+      error: { name: error.name, message: error.message }
+    },
+    "worker error"
+  );
+});
+
+knowledgeDeleteWorker.on("active", (job) => {
+  logger.info(
+    { queue: queueNames.knowledgeDeletion, jobId: job.id, jobName: job.name },
+    "job started"
+  );
+});
+
+knowledgeDeleteWorker.on("completed", (job) => {
+  logger.info(
+    { queue: queueNames.knowledgeDeletion, jobId: job.id, jobName: job.name },
+    "job completed"
+  );
+});
+
+knowledgeDeleteWorker.on("failed", (job, error) => {
+  const attempts = typeof job?.opts.attempts === "number" ? job.opts.attempts : 1;
+  const willRetry = Boolean(job && job.attemptsMade < attempts);
+  const log = willRetry ? logger.warn.bind(logger) : logger.error.bind(logger);
+  log(
+    {
+      queue: queueNames.knowledgeDeletion,
+      jobId: job?.id,
+      jobName: job?.name,
+      correlationId: readCorrelationId(job?.data),
+      attempt: job?.attemptsMade,
+      willRetry,
+      error: { name: error.name, message: error.message }
+    },
+    "job failed"
+  );
+});
+
+knowledgeDeleteWorker.on("error", (error) => {
+  logger.error(
+    {
+      queue: queueNames.knowledgeDeletion,
+      error: { name: error.name, message: error.message }
+    },
+    "worker error"
+  );
+});
+
 async function dispatchOutbox(): Promise<void> {
   if (dispatchRunning) {
     return;
@@ -240,8 +407,14 @@ void dispatchOutbox();
 async function shutdown(signal: NodeJS.Signals): Promise<void> {
   logger.info({ signal }, "worker shutdown requested");
   clearInterval(outboxTimer);
-  await Promise.all([datasetWorker.close(), agentRunWorker.close()]);
+  await Promise.all([
+    datasetWorker.close(),
+    agentRunWorker.close(),
+    knowledgeIndexWorker.close(),
+    knowledgeDeleteWorker.close()
+  ]);
   await outboxDispatcher.close();
+  if (memoryRedis.isOpen) await memoryRedis.quit();
   await pool.end();
   logger.info("worker shutdown complete");
 }
@@ -256,7 +429,12 @@ process.on("SIGINT", () => {
 
 logger.info(
   {
-    queues: [queueNames.datasetIngestion, queueNames.agentRun],
+    queues: [
+      queueNames.datasetIngestion,
+      queueNames.agentRun,
+      queueNames.knowledgeIndexing,
+      queueNames.knowledgeDeletion
+    ],
     concurrency: env.WORKER_CONCURRENCY
   },
   "worker started"

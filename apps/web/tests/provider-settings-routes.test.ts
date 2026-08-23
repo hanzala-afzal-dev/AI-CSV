@@ -111,6 +111,7 @@ vi.mock("../src/server/runtime", () => ({
 import { PUT as putCredential } from "../src/app/api/v1/settings/providers/openai/credential/route";
 import { GET as getModels } from "../src/app/api/v1/settings/providers/openai/models/route";
 import { PUT as putPreference } from "../src/app/api/v1/settings/providers/openai/preferences/route";
+import { POST as postValidateCredential } from "../src/app/api/v1/settings/providers/openai/validate/route";
 
 const apiKey = "sk-test-abcdefghijklmnopqrstuvwxyz123456";
 const correlationId = "44444444-4444-4444-8444-444444444444";
@@ -228,12 +229,47 @@ describe("OpenAI provider settings routes", () => {
       `provider:openai:validation:user:${state.userId}`
     ]);
   });
+
+  it("revalidates only the saved credential through the protected POST route", async () => {
+    const response = await postValidateCredential(
+      mutationRequest("/validate", {}, { method: "POST" })
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      data: {
+        settings: {
+          credential: {
+            configured: true,
+            last4: "3456",
+            status: "valid"
+          },
+          preference: {
+            modelId: "gpt-5.5",
+            reasoningEffort: "medium"
+          }
+        },
+        models: [{ id: "gpt-5.5" }]
+      }
+    });
+    expect(state.providerSettingsService.revalidateCredential).toHaveBeenCalledWith({
+      userId: state.userId,
+      correlationId
+    });
+    expect(state.rateLimitKeys).toEqual([
+      `browser:user:${state.userId}`,
+      `provider:openai:validation:user:${state.userId}`
+    ]);
+  });
 });
 
 function mutationRequest(
   path: string,
   body: unknown,
-  options: { readonly csrfToken?: string | null } = {}
+  options: {
+    readonly csrfToken?: string | null;
+    readonly method?: "POST" | "PUT";
+  } = {}
 ): Request {
   const csrfToken = options.csrfToken === undefined ? "csrf-token" : options.csrfToken;
   const headers = new Headers({
@@ -245,7 +281,7 @@ function mutationRequest(
   });
   if (csrfToken) headers.set("x-csrf-token", csrfToken);
   return new Request(`https://csv.example.com/api/v1/settings/providers/openai${path}`, {
-    method: "PUT",
+    method: options.method ?? "PUT",
     headers,
     body: JSON.stringify(body)
   });

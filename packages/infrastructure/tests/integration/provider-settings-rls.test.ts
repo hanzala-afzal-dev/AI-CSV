@@ -189,6 +189,33 @@ describeIntegration("provider settings repository and RLS", () => {
   it("runs the real repository lifecycle through least-privilege grants", async () => {
     const credentialId = randomUUID();
     const correlationId = randomUUID();
+    const datasetId = randomUUID();
+    const datasetVersionId = randomUUID();
+    await admin.query(
+      `insert into datasets (id, user_id, name, original_filename)
+       values ($1, $2, 'Credential retry dataset', 'retry.csv')`,
+      [datasetId, repositoryUserId]
+    );
+    await admin.query(
+      `insert into dataset_versions
+         (id, user_id, dataset_id, version_number, original_filename, mime_type,
+          object_key, size_bytes, checksum)
+       values ($1, $2, $3, 1, 'retry.csv', 'text/csv', $4, 10, $5)`,
+      [
+        datasetVersionId,
+        repositoryUserId,
+        datasetId,
+        `users/${repositoryUserId}/datasets/${datasetId}/versions/${datasetVersionId}/original.csv`,
+        "e".repeat(64)
+      ]
+    );
+    await admin.query(
+      `insert into semantic_documents
+         (user_id, dataset_id, dataset_version_id, source_id, document_type,
+          content, content_hash, index_status)
+       values ($1, $2, $3, $3, 'dataset_description', 'Retry document', $4, 'failed')`,
+      [repositoryUserId, datasetId, datasetVersionId, "f".repeat(64)]
+    );
     const settings = await repository.replaceCredential({
       userId: repositoryUserId,
       credentialId,
@@ -223,6 +250,23 @@ describeIntegration("provider settings repository and RLS", () => {
       ciphertext: "cmVwb3NpdG9yeS1jaXBoZXJ0ZXh0",
       userId: repositoryUserId
     });
+    const reindex = await admin.query(
+      `select payload from outbox_events
+       where user_id = $1 and event_name = 'queue.knowledge.index.v1'
+       order by occurred_at desc limit 1`,
+      [repositoryUserId]
+    );
+    expect(reindex.rows).toEqual([
+      {
+        payload: expect.objectContaining({
+          correlationId,
+          userId: repositoryUserId,
+          source: "dataset-schema",
+          datasetId,
+          datasetVersionId
+        })
+      }
+    ]);
 
     await expect(
       repository.deleteCredential({

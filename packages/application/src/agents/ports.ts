@@ -30,6 +30,8 @@ export interface AgentCheckpointRepository {
 export interface AgentPlanModelInput {
   readonly question: string;
   readonly columns: AgentAnalysisStateContract["columns"];
+  readonly conversationHistory: AgentAnalysisStateContract["conversationHistory"];
+  readonly retrievedContext: AgentAnalysisStateContract["retrievedContext"];
   readonly clarification: AgentClarificationContract | null;
   readonly validationErrors: readonly string[];
 }

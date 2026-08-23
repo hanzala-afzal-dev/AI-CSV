@@ -26,6 +26,7 @@ describe("OpenAiProviderGateway", () => {
     const gateway = new OpenAiProviderGateway({
       baseUrl: "https://api.openai.test/v1",
       timeoutMs: 1000,
+      retryDelayMs: 0,
       fetch: fetchMock
     });
     const secret = SecretValue.create(apiKey);
@@ -42,6 +43,43 @@ describe("OpenAiProviderGateway", () => {
     secret.destroy();
   });
 
+  it("retries one transient transport failure before succeeding", async () => {
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockRejectedValueOnce(new TypeError("temporary network failure"))
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ data: [{ id: "gpt-5.5" }] }), { status: 200 })
+      );
+    const gateway = new OpenAiProviderGateway({
+      baseUrl: "https://api.openai.test/v1",
+      timeoutMs: 1000,
+      retryDelayMs: 0,
+      fetch: fetchMock
+    });
+    const secret = SecretValue.create(apiKey);
+
+    await expect(gateway.validateCredential(secret)).resolves.toMatchObject({
+      models: [{ id: "gpt-5.5" }]
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    secret.destroy();
+  });
+
+  it.each([401, 403, 429])("does not retry provider status %s", async (status) => {
+    const fetchMock = vi.fn(async () => new Response("{}", { status })) as typeof fetch;
+    const gateway = new OpenAiProviderGateway({
+      baseUrl: "https://api.openai.test/v1",
+      timeoutMs: 1000,
+      retryDelayMs: 0,
+      fetch: fetchMock
+    });
+    const secret = SecretValue.create(apiKey);
+
+    await expect(gateway.validateCredential(secret)).rejects.toBeInstanceOf(Error);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    secret.destroy();
+  });
+
   it.each([
     [401, "PROVIDER_KEY_INVALID"],
     [403, "PROVIDER_KEY_INVALID"],
@@ -51,6 +89,7 @@ describe("OpenAiProviderGateway", () => {
     const gateway = new OpenAiProviderGateway({
       baseUrl: "https://api.openai.test/v1",
       timeoutMs: 1000,
+      retryDelayMs: 0,
       fetch: vi.fn(
         async () =>
           new Response('{"error":{"message":"secret-bearing raw response"}}', {

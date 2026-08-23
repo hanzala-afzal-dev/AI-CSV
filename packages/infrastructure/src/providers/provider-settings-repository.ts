@@ -1,4 +1,4 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import type {
   ProviderSettingsRepository,
   ProviderSettingsSnapshot,
@@ -6,7 +6,14 @@ import type {
   StoredEncryptedCredential
 } from "@agentic-csv/application";
 import { reasoningEfforts, type ReasoningEffort } from "@agentic-csv/domain";
-import { providerCredentials, providerPreferences, users } from "../../drizzle/schema";
+import {
+  memoryRecords,
+  outboxEvents,
+  providerCredentials,
+  providerPreferences,
+  semanticDocuments,
+  users
+} from "../../drizzle/schema";
 import type { DatabaseClient } from "../database/client";
 
 type DatabaseTransaction = Parameters<Parameters<DatabaseClient["transaction"]>[0]>[0];
@@ -119,6 +126,11 @@ export class PostgresProviderSettingsRepository implements ProviderSettingsRepos
           occurredAt: input.validatedAt
         });
       }
+      await enqueueRetryableMemoryIndex(transaction, {
+        userId: input.userId,
+        correlationId: input.correlationId,
+        occurredAt: input.validatedAt
+      });
       return readSettings(transaction, input.userId);
     });
   }
@@ -160,6 +172,13 @@ export class PostgresProviderSettingsRepository implements ProviderSettingsRepos
         },
         occurredAt: input.occurredAt
       });
+      if (input.status === "valid") {
+        await enqueueRetryableMemoryIndex(transaction, {
+          userId: input.userId,
+          correlationId: input.correlationId,
+          occurredAt: input.occurredAt
+        });
+      }
       return readSettings(transaction, input.userId);
     });
   }
@@ -283,6 +302,83 @@ export class PostgresProviderSettingsRepository implements ProviderSettingsRepos
       );
       return work(transaction);
     });
+  }
+}
+
+async function enqueueRetryableMemoryIndex(
+  transaction: DatabaseTransaction,
+  input: {
+    readonly userId: string;
+    readonly correlationId: string;
+    readonly occurredAt: Date;
+  }
+): Promise<void> {
+  const statuses = ["pending", "failed"];
+  const datasetDocuments = await transaction
+    .selectDistinct({
+      datasetId: semanticDocuments.datasetId,
+      datasetVersionId: semanticDocuments.datasetVersionId
+    })
+    .from(semanticDocuments)
+    .where(
+      and(
+        eq(semanticDocuments.userId, input.userId),
+        inArray(semanticDocuments.indexStatus, statuses)
+      )
+    );
+  const memories = await transaction
+    .select({
+      id: memoryRecords.id,
+      datasetId: memoryRecords.datasetId,
+      datasetVersionId: memoryRecords.datasetVersionId
+    })
+    .from(memoryRecords)
+    .where(
+      and(
+        eq(memoryRecords.userId, input.userId),
+        inArray(memoryRecords.indexStatus, statuses)
+      )
+    );
+  if (datasetDocuments.length > 0) {
+    await transaction.insert(outboxEvents).values(
+      datasetDocuments.map((document) => ({
+        userId: input.userId,
+        aggregateId: document.datasetVersionId,
+        eventName: "queue.knowledge.index.v1",
+        payload: {
+          version: 1,
+          jobName: "knowledge.index.v1",
+          correlationId: input.correlationId,
+          userId: input.userId,
+          idempotencyKey: `credential-reindex:${input.correlationId}:dataset:${document.datasetVersionId}`,
+          source: "dataset-schema",
+          datasetId: document.datasetId,
+          datasetVersionId: document.datasetVersionId
+        },
+        occurredAt: input.occurredAt
+      }))
+    );
+  }
+  if (memories.length > 0) {
+    await transaction.insert(outboxEvents).values(
+      memories.map((memory) => ({
+        userId: input.userId,
+        aggregateId: memory.id,
+        eventName: "queue.knowledge.index.v1",
+        payload: {
+          version: 1,
+          jobName: "knowledge.index.v1",
+          correlationId: input.correlationId,
+          userId: input.userId,
+          idempotencyKey: `credential-reindex:${input.correlationId}:memory:${memory.id}`,
+          source: "confirmed-definition",
+          datasetId: memory.datasetId,
+          datasetVersionId: memory.datasetVersionId,
+          memoryId: memory.id
+        },
+        occurredAt: input.occurredAt
+      }))
+    );
   }
 }
 

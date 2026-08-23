@@ -140,6 +140,32 @@ Compose template if the ignored `docker/stack.yml` predates Phase 7. Those mount
 source edits inside the existing worker container. Further Phase 7 source changes and normal daily starts
 do not require another image build.
 
+## Phase 8 environment upgrade
+
+Phase 8 adds typed memory/index/delete queues and uses the OpenAI key already stored per user. It does not
+add a shared `OPENAI_API_KEY`. The memory tuning variables in `.env.example` have typed defaults, so an
+existing root `.env` may omit them; `pnpm env:check` reports the defaults without failing. Add them only for
+local tuning.
+
+Refresh the Qdrant image pin, ordered startup command and worker knowledge-base mount from the tracked
+Compose template, then reconcile once:
+
+```bash
+pnpm env:check
+pnpm docker:config
+pnpm docker:up
+pnpm docker:ps
+```
+
+This may replace Qdrant to run `v1.17.1`, but its named volume and points remain. It may recreate `web` or
+`worker` when their command or mount changed; it does not rebuild either image. The worker establishes
+dependency declarations before watch mode, then ordinary source changes hot-reload in the existing
+container. The read-only `knowledge-base` mount keeps reviewed policies current.
+
+The production worker target copies the reviewed knowledge base. Rebuild that target only when verifying or
+publishing a production image; daily development still uses `pnpm docker:stop` and `pnpm docker:start`
+without builds or recreation.
+
 Run normal lifecycle commands from the repository root:
 
 ```bash

@@ -88,6 +88,7 @@ describe("DatasetIngestionService", () => {
       datasetId: payload.datasetId,
       datasetVersionId: payload.datasetVersionId,
       claimId: "job-1",
+      correlationId: payload.correlationId,
       occurredAt: now,
       code: "DATASET_PROCESSING_FAILED"
     });

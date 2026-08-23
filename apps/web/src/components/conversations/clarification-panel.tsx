@@ -15,19 +15,24 @@ export function ClarificationPanel({
 }: {
   readonly clarification: Clarification;
   readonly busy: boolean;
-  readonly onSubmit: (answer: string) => void;
+  readonly onSubmit: (answer: string, saveAsDatasetDefinition: boolean) => void;
 }) {
   const [selected, setSelected] = useState("");
   const [customAnswer, setCustomAnswer] = useState("");
+  const [remember, setRemember] = useState(false);
 
   const answer = selected || customAnswer.trim();
+  const selectedOption = clarification.options.find(
+    (option) => option.value === selected
+  );
   return (
     <form
       className="mt-1 grid w-full max-w-xl gap-4 rounded-md border border-line bg-panel p-4 shadow-sm"
       aria-labelledby={`clarification-${clarification.id}`}
       onSubmit={(event) => {
         event.preventDefault();
-        if (answer && !busy) onSubmit(answer);
+        if (answer && !busy)
+          onSubmit(answer, remember && Boolean(selectedOption?.columnId));
       }}
     >
       <div>
@@ -55,6 +60,7 @@ export function ClarificationPanel({
                 onClick={() => {
                   setSelected(option.value);
                   setCustomAnswer("");
+                  if (!option.columnId) setRemember(false);
                 }}
               >
                 <span
@@ -86,9 +92,23 @@ export function ClarificationPanel({
           onChange={(event) => {
             setCustomAnswer(event.target.value);
             setSelected("");
+            setRemember(false);
           }}
         />
       </div>
+
+      {selectedOption?.columnId ? (
+        <label className="flex items-start gap-3 text-sm font-medium text-ink">
+          <input
+            type="checkbox"
+            checked={remember}
+            disabled={busy}
+            className="mt-0.5 size-4 rounded border-line accent-action"
+            onChange={(event) => setRemember(event.target.checked)}
+          />
+          <span>Use this definition for future questions about this CSV</span>
+        </label>
+      ) : null}
 
       <div className="flex justify-end">
         <Button type="submit" size="sm" disabled={!answer || busy}>

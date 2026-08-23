@@ -82,6 +82,7 @@ export type {
 export {
   agentRunJobPayloadSchema,
   datasetIngestionJobPayloadSchema,
+  knowledgeDeleteJobPayloadSchema,
   knowledgeIndexJobPayloadSchema,
   outboxPublishJobPayloadSchema,
   queueJobNameSchema,
@@ -90,6 +91,7 @@ export {
 export type {
   AgentRunJobPayload,
   DatasetIngestionJobPayload,
+  KnowledgeDeleteJobPayload,
   KnowledgeIndexJobPayload,
   OutboxPublishJobPayload,
   QueueJobName
@@ -100,6 +102,7 @@ export {
   agentClarificationOptionSchema,
   agentClarificationSchema,
   agentColumnContextSchema,
+  agentConversationTurnSchema,
   agentErrorSchema,
   agentExplanationSchema,
   agentGraphPhaseSchema,
@@ -114,6 +117,7 @@ export type {
   AgentAnalysisStateContract,
   AgentClarificationContract,
   AgentColumnContextContract,
+  AgentConversationTurnContract,
   AgentExplanationContract,
   AgentPlanningDecisionDraftContract,
   AgentPlanningDecisionContract,
@@ -133,6 +137,22 @@ export {
   providerSettingsSchema,
   reasoningEffortSchema
 } from "./provider";
+export {
+  confirmedDatasetDefinitionSchema,
+  memoryConfidenceSchema,
+  memoryDocumentTypeSchema,
+  memoryIndexStatusSchema,
+  memoryRetrievalResultSchema,
+  retrievedMemoryContextSchema
+} from "./memory";
+export type {
+  ConfirmedDatasetDefinitionContract,
+  MemoryConfidenceContract,
+  MemoryDocumentTypeContract,
+  MemoryIndexStatusContract,
+  MemoryRetrievalResultContract,
+  RetrievedMemoryContextContract
+} from "./memory";
 export type {
   ProviderCredentialSummaryContract,
   ProviderCredentialWriteRequest,

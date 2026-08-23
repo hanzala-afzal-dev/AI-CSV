@@ -7,7 +7,8 @@ import {
   type AgentModelSession,
   type AgentProviderService,
   type AnalysisService,
-  type ConversationRepository
+  type ConversationRepository,
+  type SemanticMemoryRetriever
 } from "@agentic-csv/application";
 import {
   agentAnalysisStateSchema,
@@ -213,6 +214,72 @@ describe("LangGraphConversationResponder", () => {
     expect(analysis.executePlan).not.toHaveBeenCalled();
   });
 
+  it("answers history questions from the bounded same-conversation turn window", async () => {
+    const decision: AgentPlanningDecisionContract = {
+      intent: "conversation_history",
+      plan: null,
+      requiresClarification: false,
+      clarificationQuestion: null,
+      clarificationOptions: [],
+      assumptions: [],
+      directResponse:
+        "Earlier, you created a monthly line chart and a pie chart grouped by sex."
+    };
+    const model = modelSession(decision);
+    const analysis = analysisService(
+      analysisPlanSchema.parse({
+        version: 1,
+        operation: "quality",
+        dimensions: [],
+        measures: [{ columnId: regionId, aggregation: "null_count" }],
+        filters: [],
+        sort: [],
+        limit: 100,
+        visualizationPreference: "table",
+        assumptions: []
+      })
+    );
+    const memory = {
+      retrieve: vi.fn(async () => ({ version: 1 as const, revision: 0, items: [] }))
+    } satisfies SemanticMemoryRetriever;
+    const responder = responderWith({
+      checkpoints: new MemoryCheckpointRepository(),
+      model,
+      analysis,
+      memory
+    });
+    const conversationHistory = [
+      {
+        messageId: "77777777-7777-4777-8777-777777777777",
+        sequence: 1,
+        role: "user" as const,
+        content: "Create a monthly line chart"
+      },
+      {
+        messageId: "88888888-8888-4888-8888-888888888888",
+        sequence: 2,
+        role: "assistant" as const,
+        content: "The verified monthly series is ready."
+      }
+    ];
+
+    const response = await responder.respond({
+      ...runInput(),
+      content: "What was previously done?",
+      conversationHistory
+    });
+
+    expect(response).toMatchObject({
+      state: "completed",
+      text: expect.stringContaining("monthly line chart")
+    });
+    expect(model.createPlan).toHaveBeenCalledWith(
+      expect.objectContaining({ conversationHistory })
+    );
+    expect(memory.retrieve).not.toHaveBeenCalled();
+    expect(analysis.executePlan).not.toHaveBeenCalled();
+  });
+
   it("returns the verified result when model explanation formatting fails", async () => {
     const plan = analysisPlanSchema.parse({
       version: 1,
@@ -324,6 +391,82 @@ describe("LangGraphConversationResponder", () => {
       status: "answered",
       answer: "net_revenue"
     });
+  });
+
+  it("applies and discloses a confirmed definition retrieved for the active version", async () => {
+    const checkpoints = new MemoryCheckpointRepository();
+    const plan = analysisPlanSchema.parse({
+      version: 1,
+      operation: "compare",
+      dimensions: [{ columnId: regionId }],
+      measures: [{ columnId: netRevenueId, aggregation: "sum" }],
+      filters: [],
+      sort: [],
+      limit: 100,
+      visualizationPreference: "bar",
+      assumptions: []
+    });
+    const model = modelSession({
+      intent: "comparison",
+      plan,
+      requiresClarification: false,
+      clarificationQuestion: null,
+      clarificationOptions: [],
+      assumptions: []
+    });
+    const memory = {
+      retrieve: vi.fn(async () => ({
+        version: 1 as const,
+        revision: 2,
+        items: [
+          {
+            sourceId: randomUUID(),
+            documentType: "business_rule" as const,
+            content: "Confirmed dataset definition: revenue means net_revenue.",
+            score: 1,
+            confidence: "confirmed" as const,
+            datasetId,
+            datasetVersionId,
+            definition: {
+              version: 1 as const,
+              alias: "revenue",
+              columnId: netRevenueId,
+              columnName: "net_revenue",
+              clarificationId: randomUUID(),
+              sourceMessageId: randomUUID()
+            }
+          }
+        ]
+      }))
+    } satisfies SemanticMemoryRetriever;
+    const analysis = analysisService(plan);
+    const responder = responderWith({ checkpoints, model, analysis, memory });
+
+    const completed = await responder.respond({
+      ...runInput(),
+      content: "Show revenue by region"
+    });
+
+    expect(completed).toMatchObject({
+      state: "completed",
+      text: expect.stringContaining(
+        "Remembered definition applied: revenue means net_revenue."
+      )
+    });
+    expect(model.createPlan).toHaveBeenCalledWith(
+      expect.objectContaining({
+        retrievedContext: [
+          expect.objectContaining({
+            definition: expect.objectContaining({ columnId: netRevenueId })
+          })
+        ]
+      })
+    );
+    expect(analysis.executePlan).toHaveBeenCalledWith(
+      expect.objectContaining({
+        plan: expect.objectContaining({ measures: plan.measures })
+      })
+    );
   });
 
   it("accepts a selected clarification column used as a trend dimension", async () => {
@@ -517,6 +660,7 @@ function responderWith(input: {
     readonly maxResultRowsToModel: number;
   };
   readonly cancelled?: boolean;
+  readonly memory?: SemanticMemoryRetriever;
 }) {
   const provider = {
     withSession: vi.fn(async (_userId, _selection, work) => work(input.model))
@@ -537,7 +681,8 @@ function responderWith(input: {
       maxResultRowsToModel: 20
     },
     () => now,
-    () => randomUUID()
+    () => randomUUID(),
+    input.memory
   );
 }
 
@@ -633,6 +778,7 @@ function runInput() {
     userMessageId,
     correlationId,
     content: "Show revenue by region",
+    conversationHistory: [],
     selectedModel: "gpt-5.5",
     selectedReasoningEffort: "medium"
   };

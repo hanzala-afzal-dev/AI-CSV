@@ -121,12 +121,13 @@ export async function cancelRun(
 export async function submitClarification(
   conversationId: string,
   runId: string,
-  answer: string
+  answer: string,
+  saveAsDatasetDefinition: boolean
 ): Promise<AgentRunSummaryContract> {
   const response = await authenticatedMutation<Envelope<{ readonly run: unknown }>>(
     `/api/v1/conversations/${conversationId}/runs/${runId}/clarifications`,
     "POST",
-    { answer }
+    { answer, saveAsDatasetDefinition }
   );
   return agentRunSummarySchema.parse(response.data.run);
 }

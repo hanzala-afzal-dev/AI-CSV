@@ -12,7 +12,8 @@ export interface AnalysisRuntimeState {
   readonly analysis: CompletedAnalysis | null;
   readonly explanation: AgentExplanationContract | null;
   readonly finalText: string | null;
-  readonly outcome: "continue" | "waiting_for_user" | "unsupported" | "completed";
+  readonly outcome:
+    "continue" | "waiting_for_user" | "direct_response" | "unsupported" | "completed";
 }
 
 export const AnalysisStateAnnotation = Annotation.Root({

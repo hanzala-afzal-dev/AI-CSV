@@ -137,6 +137,28 @@ export type {
   AgentModelSession,
   AgentPlanModelInput
 } from "./agents/ports";
+export { MemoryError } from "./memory/memory-error";
+export type { MemoryErrorCode } from "./memory/memory-error";
+export {
+  MemoryDeletionService,
+  MemoryIndexingService,
+  MemoryRetrievalService
+} from "./memory/memory-service";
+export type {
+  MemoryIndexingPolicy,
+  MemoryRetrievalPolicy
+} from "./memory/memory-service";
+export type {
+  MemoryIndexDocument,
+  MemoryRepository,
+  MemoryRetrievalCache,
+  MemoryRetrievalInput,
+  MemoryVectorHit,
+  MemoryVectorPoint,
+  SemanticMemoryRetriever,
+  SemanticVectorStore,
+  UserTextEmbeddingProvider
+} from "./memory/ports";
 export type {
   AiProvider,
   AiProviderGateway,

@@ -111,8 +111,14 @@ export class ConversationService {
     return result.conversation;
   }
 
-  public async delete(userId: string, conversationId: string): Promise<void> {
-    if (!(await this.repository.delete(userId, conversationId))) throw notFound();
+  public async delete(input: {
+    readonly userId: string;
+    readonly conversationId: string;
+    readonly correlationId: string;
+  }): Promise<void> {
+    if (!(await this.repository.delete({ ...input, occurredAt: this.now() }))) {
+      throw notFound();
+    }
   }
 
   public submitMessage(input: {
@@ -146,11 +152,13 @@ export class ConversationService {
     readonly conversationId: string;
     readonly runId: string;
     readonly answer: string;
+    readonly saveAsDatasetDefinition: boolean;
     readonly correlationId: string;
   }): Promise<AgentRunView> {
     const run = await this.repository.resumeRun({
       ...input,
       answerMessageId: this.createId(),
+      memoryId: this.createId(),
       answer: normalizeMessage(input.answer),
       occurredAt: this.now()
     });

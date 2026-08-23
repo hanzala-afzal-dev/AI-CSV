@@ -38,6 +38,7 @@ The assistant must let a user upload a CSV, ask natural-language questions, clar
 | 019 | [Implementation plan](./019-implementation-plan.md)                      | Ordered delivery phases and definition of done           |
 | 020 | [Codex execution contract](./020-codex-execution-contract.md)            | Instructions for implementing from these specs           |
 | 021 | [Phase 8 execution contract](./021-phase-8-execution-contract.md)        | Concrete RAG and confirmed-memory delivery boundary      |
+| 022 | [Phase 9 execution contract](./022-phase-9-execution-contract.md)        | Suggestions, evaluations and release-hardening boundary  |
 
 ## How to use
 

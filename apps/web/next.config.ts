@@ -8,6 +8,10 @@ const nextConfig: NextConfig = {
   output: "standalone",
   outputFileTracingRoot: workspaceRoot,
   reactStrictMode: true,
+  experimental: {
+    // Bind-mounted source can leave persistent Turbopack route state stale after Docker restarts.
+    turbopackFileSystemCacheForDev: false
+  },
   turbopack: {
     root: workspaceRoot
   },

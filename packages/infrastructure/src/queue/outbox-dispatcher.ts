@@ -2,17 +2,26 @@ import { createHash } from "node:crypto";
 import { and, asc, eq, inArray, isNull } from "drizzle-orm";
 import {
   agentRunJobPayloadSchema,
-  datasetIngestionJobPayloadSchema
+  datasetIngestionJobPayloadSchema,
+  knowledgeDeleteJobPayloadSchema,
+  knowledgeIndexJobPayloadSchema
 } from "@agentic-csv/contracts";
 import { outboxEvents } from "../../drizzle/schema";
 import type { DatabaseClient } from "../database/client";
 import type { AppLogger } from "../logging/logger";
-import { createAgentRunQueue, createDatasetIngestionQueue } from "./queues";
+import {
+  createAgentRunQueue,
+  createDatasetIngestionQueue,
+  createKnowledgeDeleteQueue,
+  createKnowledgeIndexQueue
+} from "./queues";
 import type { AppEnv } from "../config/env";
 
 export class OutboxDispatcher {
   private readonly datasetQueue;
   private readonly agentRunQueue;
+  private readonly knowledgeIndexQueue;
+  private readonly knowledgeDeleteQueue;
 
   public constructor(
     private readonly database: DatabaseClient,
@@ -21,6 +30,8 @@ export class OutboxDispatcher {
   ) {
     this.datasetQueue = createDatasetIngestionQueue(env);
     this.agentRunQueue = createAgentRunQueue(env);
+    this.knowledgeIndexQueue = createKnowledgeIndexQueue(env);
+    this.knowledgeDeleteQueue = createKnowledgeDeleteQueue(env);
   }
 
   public async dispatchBatch(limit = 25): Promise<number> {
@@ -32,7 +43,9 @@ export class OutboxDispatcher {
           isNull(outboxEvents.publishedAt),
           inArray(outboxEvents.eventName, [
             "queue.dataset.ingest.v1",
-            "queue.agent.run.v1"
+            "queue.agent.run.v1",
+            "queue.knowledge.index.v1",
+            "queue.knowledge.delete.v1"
           ])
         )
       )
@@ -44,10 +57,19 @@ export class OutboxDispatcher {
       try {
         const payload = parseQueuePayload(event.eventName, event.payload);
         const jobId = createHash("sha256").update(payload.idempotencyKey).digest("hex");
-        if (payload.jobName === "agent.run.v1") {
-          await this.agentRunQueue.add(payload.jobName, payload, { jobId });
-        } else {
-          await this.datasetQueue.add(payload.jobName, payload, { jobId });
+        switch (payload.jobName) {
+          case "agent.run.v1":
+            await this.agentRunQueue.add(payload.jobName, payload, { jobId });
+            break;
+          case "knowledge.index.v1":
+            await this.knowledgeIndexQueue.add(payload.jobName, payload, { jobId });
+            break;
+          case "knowledge.delete.v1":
+            await this.knowledgeDeleteQueue.add(payload.jobName, payload, { jobId });
+            break;
+          case "dataset.ingest.v1":
+            await this.datasetQueue.add(payload.jobName, payload, { jobId });
+            break;
         }
         await this.database
           .update(outboxEvents)
@@ -72,12 +94,26 @@ export class OutboxDispatcher {
   }
 
   public async close(): Promise<void> {
-    await Promise.all([this.datasetQueue.close(), this.agentRunQueue.close()]);
+    await Promise.all([
+      this.datasetQueue.close(),
+      this.agentRunQueue.close(),
+      this.knowledgeIndexQueue.close(),
+      this.knowledgeDeleteQueue.close()
+    ]);
   }
 }
 
 function parseQueuePayload(eventName: string, payload: unknown) {
-  return eventName === "queue.agent.run.v1"
-    ? agentRunJobPayloadSchema.parse(payload)
-    : datasetIngestionJobPayloadSchema.parse(payload);
+  switch (eventName) {
+    case "queue.agent.run.v1":
+      return agentRunJobPayloadSchema.parse(payload);
+    case "queue.knowledge.index.v1":
+      return knowledgeIndexJobPayloadSchema.parse(payload);
+    case "queue.knowledge.delete.v1":
+      return knowledgeDeleteJobPayloadSchema.parse(payload);
+    case "queue.dataset.ingest.v1":
+      return datasetIngestionJobPayloadSchema.parse(payload);
+    default:
+      throw new Error(`Unsupported queue outbox event: ${eventName}`);
+  }
 }

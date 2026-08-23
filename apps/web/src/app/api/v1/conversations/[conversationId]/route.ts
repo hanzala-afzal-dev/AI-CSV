@@ -76,7 +76,11 @@ export async function DELETE(request: Request, { params }: RouteContext) {
     const context = await authorizeBrowserMutation(request);
     correlationId = context.correlationId;
     const conversationId = idSchema.parse((await params).conversationId);
-    await getRuntime().conversationService.delete(context.session.userId, conversationId);
+    await getRuntime().conversationService.delete({
+      userId: context.session.userId,
+      conversationId,
+      correlationId: context.correlationId
+    });
     return new NextResponse(null, { status: 204, headers: context.responseHeaders });
   } catch (error) {
     return errorResponse(error, correlationId);

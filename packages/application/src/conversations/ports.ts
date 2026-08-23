@@ -1,6 +1,7 @@
 import type {
   AgentAnalysisStateContract,
   AgentClarificationContract,
+  AgentConversationTurnContract,
   AgentProgressStage,
   AnalysisPlanContract,
   AnalysisProvenanceContract,
@@ -119,6 +120,7 @@ export interface ConversationRunWork {
   readonly runId: string;
   readonly userMessageId: string;
   readonly content: string;
+  readonly conversationHistory: readonly AgentConversationTurnContract[];
   readonly selectedModel: string | null;
   readonly selectedReasoningEffort: string | null;
 }
@@ -169,7 +171,12 @@ export interface ConversationRepository {
     readonly datasetVersionId: string | null;
     readonly occurredAt: Date;
   }): Promise<ConversationDatasetAttachmentResult>;
-  delete(userId: string, conversationId: string): Promise<boolean>;
+  delete(input: {
+    readonly userId: string;
+    readonly conversationId: string;
+    readonly correlationId: string;
+    readonly occurredAt: Date;
+  }): Promise<boolean>;
   enqueueMessage(input: {
     readonly userId: string;
     readonly conversationId: string;
@@ -211,6 +218,8 @@ export interface ConversationRepository {
     readonly runId: string;
     readonly answerMessageId: string;
     readonly answer: string;
+    readonly saveAsDatasetDefinition: boolean;
+    readonly memoryId: string;
     readonly correlationId: string;
     readonly occurredAt: Date;
   }): Promise<AgentRunView | null>;
@@ -261,6 +270,7 @@ export interface ConversationResponder {
     readonly userMessageId: string;
     readonly correlationId: string;
     readonly content: string;
+    readonly conversationHistory: readonly AgentConversationTurnContract[];
     readonly selectedModel: string | null;
     readonly selectedReasoningEffort: string | null;
   }): Promise<ConversationResponderResult>;

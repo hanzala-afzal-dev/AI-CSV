@@ -74,6 +74,14 @@ describe("ConversationRunService", () => {
       runId,
       userMessageId: "44444444-4444-4444-8444-444444444444",
       content: "Compare revenue by country",
+      conversationHistory: [
+        {
+          messageId: "77777777-7777-4777-8777-777777777777",
+          sequence: 1,
+          role: "user" as const,
+          content: "Show regional revenue"
+        }
+      ],
       selectedModel: "gpt-5.5",
       selectedReasoningEffort: "medium"
     }));
@@ -92,6 +100,14 @@ describe("ConversationRunService", () => {
 
     await service.process({ userId, conversationId, runId, correlationId });
 
+    expect(responder.respond).toHaveBeenCalledWith(
+      expect.objectContaining({
+        conversationHistory: [
+          expect.objectContaining({ sequence: 1, content: "Show regional revenue" })
+        ]
+      })
+    );
+
     expect(repository.completeRun).toHaveBeenCalledWith(
       expect.objectContaining({
         assistantMessageId: "55555555-5555-4555-8555-555555555555",
@@ -109,6 +125,7 @@ describe("ConversationRunService", () => {
       runId,
       userMessageId: "44444444-4444-4444-8444-444444444444",
       content: "Show revenue",
+      conversationHistory: [],
       selectedModel: "gpt-5.5",
       selectedReasoningEffort: "medium"
     }));
@@ -151,6 +168,7 @@ describe("ConversationRunService", () => {
       runId,
       userMessageId: "44444444-4444-4444-8444-444444444444",
       content: "Secret-bearing prompt",
+      conversationHistory: [],
       selectedModel: null,
       selectedReasoningEffort: null
     }));

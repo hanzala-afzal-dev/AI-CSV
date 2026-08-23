@@ -6,8 +6,10 @@ import {
   analysisTimeGrainSchema,
   resultColumnSchema
 } from "./analysis";
+import { retrievedMemoryContextSchema } from "./memory";
 
 export const queryIntentSchema = z.enum([
+  "conversation_history",
   "dataset_overview",
   "schema_question",
   "aggregation",
@@ -20,6 +22,15 @@ export const queryIntentSchema = z.enum([
   "clarification_answer",
   "unsupported"
 ]);
+
+export const agentConversationTurnSchema = z
+  .object({
+    messageId: z.string().uuid(),
+    sequence: z.number().int().positive(),
+    role: z.enum(["user", "assistant"]),
+    content: z.string().trim().min(1).max(4_000)
+  })
+  .strict();
 
 export const agentProgressStageSchema = z.enum([
   "authorizing",
@@ -84,7 +95,8 @@ export const agentAnalysisStateSchema = z
     datasetName: z.string().min(1).max(120).nullable(),
     originalFilename: z.string().min(1).max(255).nullable(),
     columns: z.array(agentColumnContextSchema).max(512),
-    retrievedContext: z.array(z.string().max(2_000)).max(20),
+    conversationHistory: z.array(agentConversationTurnSchema).max(12).default([]),
+    retrievedContext: z.array(retrievedMemoryContextSchema).max(20),
     intent: queryIntentSchema.nullable(),
     plan: analysisPlanSchema.nullable(),
     clarification: agentClarificationSchema.nullable(),
@@ -128,8 +140,21 @@ export const agentPlanningDecisionSchema = z
       });
     }
     if (
+      decision.intent === "conversation_history" &&
+      (decision.requiresClarification ||
+        decision.plan !== null ||
+        !decision.directResponse)
+    ) {
+      context.addIssue({
+        code: "custom",
+        message:
+          "Conversation history requests require a direct response without a plan or clarification.",
+        path: ["directResponse"]
+      });
+    }
+    if (
       !decision.requiresClarification &&
-      decision.intent !== "unsupported" &&
+      !["conversation_history", "unsupported"].includes(decision.intent) &&
       !decision.plan
     ) {
       context.addIssue({
@@ -138,7 +163,10 @@ export const agentPlanningDecisionSchema = z
         path: ["plan"]
       });
     }
-    if (decision.intent !== "unsupported" && decision.directResponse != null) {
+    if (
+      !["conversation_history", "unsupported"].includes(decision.intent) &&
+      decision.directResponse != null
+    ) {
       context.addIssue({
         code: "custom",
         message: "Only unsupported or informational requests may return direct prose.",
@@ -198,6 +226,7 @@ export const agentAnalysisOutputSchema = z
 export type QueryIntent = z.infer<typeof queryIntentSchema>;
 export type AgentProgressStage = z.infer<typeof agentProgressStageSchema>;
 export type AgentColumnContextContract = z.infer<typeof agentColumnContextSchema>;
+export type AgentConversationTurnContract = z.infer<typeof agentConversationTurnSchema>;
 export type AgentClarificationContract = z.infer<typeof agentClarificationSchema>;
 export type AgentAnalysisStateContract = z.infer<typeof agentAnalysisStateSchema>;
 export type AgentPlanningDecisionDraftContract = z.infer<
