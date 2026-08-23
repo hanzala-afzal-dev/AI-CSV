@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+#
+# Runs `gh` as your audit GitHub App instead of as you, so issues are
+# attributed to <your-app-name>[bot].
+#
+# Install to: bin/audit-gh
+#
+# WINDOWS: this file MUST have LF line endings, not CRLF. If you see
+#   "bad interpreter: /usr/bin/env bash^M"
+# that is the problem. Fix: see SETUP-windows.md step 3d.
+
+set -euo pipefail
+
+# --- config -----------------------------------------------------------------
+# App ID and Installation ID are identifiers, not secrets. Safe to commit.
+APP_ID=4695690
+INSTALLATION_ID=156042615
+
+# The private key IS a secret — keep it outside the repo.
+# In Git Bash, $HOME maps to C:\Users\<you>
+KEY_PATH="$HOME/.keys/audit-app.pem"
+# ----------------------------------------------------------------------------
+
+if [[ ! -r "$KEY_PATH" ]]; then
+  echo "audit-gh: cannot read private key at $KEY_PATH" >&2
+  exit 1
+fi
+
+# Installation tokens last one hour, so mint a fresh one on every call.
+raw="$(gh token generate \
+  --key "$KEY_PATH" \
+  --app-id "$APP_ID" \
+  --installation-id "$INSTALLATION_ID")"
+
+if command -v jq >/dev/null 2>&1; then
+  GH_TOKEN="$(printf '%s' "$raw" | jq -r '.token')"
+else
+  # No jq (common on Windows) — pull the token out with plain text tools.
+  GH_TOKEN="$(printf '%s' "$raw" \
+    | tr ',' '\n' | grep '"token"' | head -n1 \
+    | sed 's/.*"token"[[:space:]]*:[[:space:]]*"//; s/".*//')"
+fi
+
+if [[ -z "${GH_TOKEN:-}" || "$GH_TOKEN" == "null" ]]; then
+  echo "audit-gh: failed to mint an installation token" >&2
+  exit 1
+fi
+export GH_TOKEN
+
+exec gh "$@"
