@@ -558,6 +558,11 @@ export const agentClarifications = pgTable(
   },
   (table) => [
     uniqueIndex("agent_clarifications_user_run_unique").on(table.userId, table.runId),
+    uniqueIndex("agent_clarifications_user_conversation_id_unique").on(
+      table.userId,
+      table.conversationId,
+      table.id
+    ),
     foreignKey({
       name: "agent_clarifications_user_conversation_run_fk",
       columns: [table.userId, table.conversationId, table.runId],
@@ -852,6 +857,183 @@ export const datasetProfiles = pgTable(
       "dataset_profiles_suggestions_check",
       sql`jsonb_typeof(${table.suggestedPrompts}) = 'array'
         and jsonb_array_length(${table.suggestedPrompts}) between 3 and 6`
+    )
+  ]
+);
+
+export const memoryContextHeads = pgTable(
+  "memory_context_heads",
+  {
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    datasetId: uuid("dataset_id").notNull(),
+    datasetVersionId: uuid("dataset_version_id").notNull(),
+    revision: integer("revision").notNull().default(0),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
+  },
+  (table) => [
+    primaryKey({ columns: [table.userId, table.datasetId, table.datasetVersionId] }),
+    foreignKey({
+      name: "memory_context_heads_user_dataset_version_fk",
+      columns: [table.userId, table.datasetId, table.datasetVersionId],
+      foreignColumns: [
+        datasetVersions.userId,
+        datasetVersions.datasetId,
+        datasetVersions.id
+      ]
+    }).onDelete("cascade"),
+    check("memory_context_heads_revision_check", sql`${table.revision} >= 0`)
+  ]
+);
+
+export const semanticDocuments = pgTable(
+  "semantic_documents",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    datasetId: uuid("dataset_id").notNull(),
+    datasetVersionId: uuid("dataset_version_id").notNull(),
+    sourceId: uuid("source_id").notNull(),
+    documentType: varchar("document_type", { length: 40 }).notNull(),
+    content: text("content").notNull(),
+    contentHash: varchar("content_hash", { length: 64 }).notNull(),
+    schemaVersion: integer("schema_version").notNull().default(1),
+    indexStatus: varchar("index_status", { length: 24 }).notNull().default("pending"),
+    vectorPointId: uuid("vector_point_id").notNull().defaultRandom(),
+    embeddingModel: varchar("embedding_model", { length: 200 }),
+    failureCode: varchar("failure_code", { length: 80 }),
+    indexedAt: timestamp("indexed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
+  },
+  (table) => [
+    uniqueIndex("semantic_documents_source_unique").on(
+      table.userId,
+      table.datasetVersionId,
+      table.documentType,
+      table.sourceId
+    ),
+    uniqueIndex("semantic_documents_vector_point_unique").on(table.vectorPointId),
+    index("semantic_documents_retrieval_idx").on(
+      table.userId,
+      table.datasetId,
+      table.datasetVersionId,
+      table.indexStatus
+    ),
+    foreignKey({
+      name: "semantic_documents_user_dataset_version_fk",
+      columns: [table.userId, table.datasetId, table.datasetVersionId],
+      foreignColumns: [
+        datasetVersions.userId,
+        datasetVersions.datasetId,
+        datasetVersions.id
+      ]
+    }).onDelete("cascade"),
+    check(
+      "semantic_documents_type_check",
+      sql`${table.documentType} in ('dataset_description', 'column_profile')`
+    ),
+    check(
+      "semantic_documents_content_check",
+      sql`char_length(btrim(${table.content})) between 1 and 4000`
+    ),
+    check("semantic_documents_hash_check", sql`${table.contentHash} ~ '^[0-9a-f]{64}$'`),
+    check("semantic_documents_schema_check", sql`${table.schemaVersion} = 1`),
+    check(
+      "semantic_documents_status_check",
+      sql`${table.indexStatus} in ('pending', 'indexing', 'indexed', 'failed', 'deleting')`
+    )
+  ]
+);
+
+export const memoryRecords = pgTable(
+  "memory_records",
+  {
+    id: uuid("id").primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    datasetId: uuid("dataset_id").notNull(),
+    datasetVersionId: uuid("dataset_version_id").notNull(),
+    conversationId: uuid("conversation_id").notNull(),
+    sourceMessageId: uuid("source_message_id").notNull(),
+    sourceClarificationId: uuid("source_clarification_id").notNull(),
+    kind: varchar("kind", { length: 32 }).notNull(),
+    confidence: varchar("confidence", { length: 16 }).notNull(),
+    definitionKey: varchar("definition_key", { length: 120 }).notNull(),
+    content: text("content").notNull(),
+    definition: jsonb("definition").notNull(),
+    contentHash: varchar("content_hash", { length: 64 }).notNull(),
+    schemaVersion: integer("schema_version").notNull().default(1),
+    indexStatus: varchar("index_status", { length: 24 }).notNull().default("pending"),
+    vectorPointId: uuid("vector_point_id").notNull().defaultRandom(),
+    embeddingModel: varchar("embedding_model", { length: 200 }),
+    failureCode: varchar("failure_code", { length: 80 }),
+    indexedAt: timestamp("indexed_at", { withTimezone: true }),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
+  },
+  (table) => [
+    uniqueIndex("memory_records_active_definition_unique")
+      .on(table.userId, table.datasetVersionId, table.definitionKey)
+      .where(sql`${table.deletedAt} is null`),
+    uniqueIndex("memory_records_vector_point_unique").on(table.vectorPointId),
+    index("memory_records_retrieval_idx").on(
+      table.userId,
+      table.datasetId,
+      table.datasetVersionId,
+      table.indexStatus
+    ),
+    foreignKey({
+      name: "memory_records_user_dataset_version_fk",
+      columns: [table.userId, table.datasetId, table.datasetVersionId],
+      foreignColumns: [
+        datasetVersions.userId,
+        datasetVersions.datasetId,
+        datasetVersions.id
+      ]
+    }).onDelete("cascade"),
+    foreignKey({
+      name: "memory_records_user_conversation_message_fk",
+      columns: [table.userId, table.conversationId, table.sourceMessageId],
+      foreignColumns: [
+        conversationMessages.userId,
+        conversationMessages.conversationId,
+        conversationMessages.id
+      ]
+    }).onDelete("cascade"),
+    foreignKey({
+      name: "memory_records_user_conversation_clarification_fk",
+      columns: [table.userId, table.conversationId, table.sourceClarificationId],
+      foreignColumns: [
+        agentClarifications.userId,
+        agentClarifications.conversationId,
+        agentClarifications.id
+      ]
+    }).onDelete("cascade"),
+    check("memory_records_kind_check", sql`${table.kind} = 'definition'`),
+    check("memory_records_confidence_check", sql`${table.confidence} = 'confirmed'`),
+    check(
+      "memory_records_definition_key_check",
+      sql`char_length(btrim(${table.definitionKey})) between 1 and 120 and ${table.definitionKey} = lower(btrim(${table.definitionKey}))`
+    ),
+    check(
+      "memory_records_content_check",
+      sql`char_length(btrim(${table.content})) between 1 and 4000`
+    ),
+    check(
+      "memory_records_definition_check",
+      sql`jsonb_typeof(${table.definition}) = 'object' and ${table.definition}->>'version' = '1'`
+    ),
+    check("memory_records_hash_check", sql`${table.contentHash} ~ '^[0-9a-f]{64}$'`),
+    check("memory_records_schema_check", sql`${table.schemaVersion} = 1`),
+    check(
+      "memory_records_status_check",
+      sql`${table.indexStatus} in ('pending', 'indexing', 'indexed', 'failed', 'deleting')`
     )
   ]
 );

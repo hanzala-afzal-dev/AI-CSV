@@ -1,8 +1,10 @@
 import { createHash, randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Pool, type PoolClient } from "pg";
+import { agentAnalysisStateSchema } from "@agentic-csv/contracts";
 import { Conversation } from "@agentic-csv/domain";
 import { createDatabaseClient } from "../../src/database/client";
+import { PostgresAgentCheckpointRepository } from "../../src/agents/postgres-agent-checkpoint-repository";
 import { PostgresConversationRepository } from "../../src/conversations";
 
 const applicationUrl = process.env.DATABASE_URL;
@@ -12,7 +14,9 @@ const describeIntegration = applicationUrl && migrationUrl ? describe : describe
 describeIntegration("conversation repository and RLS", () => {
   const admin = new Pool({ connectionString: migrationUrl });
   const app = new Pool({ connectionString: applicationUrl });
-  const repository = new PostgresConversationRepository(createDatabaseClient(app));
+  const database = createDatabaseClient(app);
+  const repository = new PostgresConversationRepository(database);
+  const checkpoints = new PostgresAgentCheckpointRepository(database);
   const aliceId = randomUUID();
   const bobId = randomUUID();
   const aliceConversationId = randomUUID();
@@ -226,6 +230,239 @@ describeIntegration("conversation repository and RLS", () => {
     }
   });
 
+  it("persists a retryable vector-deletion event before deleting a conversation", async () => {
+    const conversationId = randomUUID();
+    const correlationId = randomUUID();
+    await repository.create(
+      Conversation.create({ id: conversationId, userId: aliceId, now }).toPrimitives()
+    );
+
+    await expect(
+      repository.delete({
+        userId: aliceId,
+        conversationId,
+        correlationId,
+        occurredAt: now
+      })
+    ).resolves.toBe(true);
+
+    const event = await admin.query(
+      `select event_name, payload from outbox_events
+       where user_id = $1 and aggregate_id = $2`,
+      [aliceId, conversationId]
+    );
+    expect(event.rows).toEqual([
+      {
+        event_name: "queue.knowledge.delete.v1",
+        payload: expect.objectContaining({
+          userId: aliceId,
+          conversationId,
+          correlationId,
+          scope: "conversation"
+        })
+      }
+    ]);
+  });
+
+  it("persists an explicitly confirmed definition and indexing event on resume", async () => {
+    const datasetId = randomUUID();
+    const datasetVersionId = randomUUID();
+    const netRevenueId = randomUUID();
+    const grossRevenueId = randomUUID();
+    const conversationId = randomUUID();
+    const messageId = randomUUID();
+    const clarificationId = randomUUID();
+    const memoryId = randomUUID();
+    const correlationId = randomUUID();
+    await admin.query(
+      `insert into datasets
+         (id, user_id, name, original_filename, status)
+       values ($1, $2, 'Revenue definitions', 'revenue.csv', 'ready')`,
+      [datasetId, aliceId]
+    );
+    await admin.query(
+      `insert into dataset_versions
+         (id, user_id, dataset_id, version_number, original_filename, mime_type,
+          object_key, size_bytes, checksum, status)
+       values ($1, $2, $3, 1, 'revenue.csv', 'text/csv', $4, 10, $5, 'ready')`,
+      [
+        datasetVersionId,
+        aliceId,
+        datasetId,
+        `users/${aliceId}/datasets/${datasetId}/versions/${datasetVersionId}/original.csv`,
+        "a".repeat(64)
+      ]
+    );
+    await admin.query(
+      `insert into dataset_columns
+         (id, user_id, dataset_id, dataset_version_id, ordinal, original_name,
+          canonical_name, inferred_type, semantic_type, nullable, statistics)
+       values ($1, $2, $3, $4, 0, 'Net revenue', 'net_revenue', 'decimal',
+               'numeric', false, $5::jsonb),
+              ($6, $2, $3, $4, 1, 'Gross revenue', 'gross_revenue', 'decimal',
+               'numeric', false, $5::jsonb)`,
+      [
+        netRevenueId,
+        aliceId,
+        datasetId,
+        datasetVersionId,
+        JSON.stringify({
+          version: 1,
+          nullCount: 0,
+          nullPercentage: 0,
+          distinctCount: 1,
+          min: "1",
+          max: "1",
+          mean: 1,
+          standardDeviation: 0,
+          exampleValues: []
+        }),
+        grossRevenueId
+      ]
+    );
+    await repository.create(
+      Conversation.create({ id: conversationId, userId: aliceId, now }).toPrimitives()
+    );
+    await repository.attachDatasetVersion({
+      userId: aliceId,
+      conversationId,
+      datasetVersionId,
+      occurredAt: now
+    });
+    const submission = await repository.enqueueMessage({
+      userId: aliceId,
+      conversationId,
+      messageId,
+      runId: randomUUID(),
+      clientRequestId: randomUUID(),
+      content: "Revenue by region",
+      correlationId,
+      occurredAt: now
+    });
+    await repository.claimRun({
+      userId: aliceId,
+      conversationId,
+      runId: submission.runId,
+      occurredAt: now
+    });
+    const clarification = {
+      id: clarificationId,
+      question: "Which revenue definition should be used for this analysis?",
+      options: [
+        { value: "net_revenue", label: "Net revenue", columnId: netRevenueId },
+        { value: "gross_revenue", label: "Gross revenue", columnId: grossRevenueId }
+      ],
+      status: "pending" as const,
+      answer: null
+    };
+    await checkpoints.save({
+      expectedRevision: null,
+      state: agentAnalysisStateSchema.parse({
+        version: 1,
+        correlationId,
+        runId: submission.runId,
+        conversationId,
+        userId: aliceId,
+        userMessageId: messageId,
+        question: "Revenue by region",
+        phase: "waiting_for_user",
+        datasetId,
+        datasetVersionId,
+        datasetName: "Revenue definitions",
+        originalFilename: "revenue.csv",
+        columns: [
+          {
+            id: netRevenueId,
+            originalName: "Net revenue",
+            canonicalName: "net_revenue",
+            inferredType: "decimal",
+            semanticType: "numeric",
+            nullable: false
+          },
+          {
+            id: grossRevenueId,
+            originalName: "Gross revenue",
+            canonicalName: "gross_revenue",
+            inferredType: "decimal",
+            semanticType: "numeric",
+            nullable: false
+          }
+        ],
+        retrievedContext: [],
+        intent: "aggregation",
+        plan: null,
+        clarification,
+        assumptions: [],
+        warnings: [],
+        errors: [],
+        validationErrors: [],
+        selectedModel: "gpt-5.5",
+        selectedReasoningEffort: "medium",
+        stepCount: 3,
+        repairCount: 0,
+        toolCallCount: 2,
+        updatedAt: now.toISOString()
+      })
+    });
+    await repository.pauseRun({
+      userId: aliceId,
+      conversationId,
+      runId: submission.runId,
+      clarification,
+      metrics: { stepCount: 3, repairCount: 0, toolCallCount: 2 },
+      occurredAt: now
+    });
+
+    const resumed = await repository.resumeRun({
+      userId: aliceId,
+      conversationId,
+      runId: submission.runId,
+      answerMessageId: randomUUID(),
+      answer: "net_revenue",
+      saveAsDatasetDefinition: true,
+      memoryId,
+      correlationId,
+      occurredAt: new Date(now.getTime() + 1_000)
+    });
+
+    expect(resumed?.status).toBe("queued");
+    const persisted = await admin.query(
+      `select confidence, definition, source_message_id, source_clarification_id,
+              index_status
+       from memory_records where id = $1`,
+      [memoryId]
+    );
+    expect(persisted.rows).toEqual([
+      {
+        confidence: "confirmed",
+        definition: expect.objectContaining({
+          alias: "revenue",
+          columnId: netRevenueId,
+          columnName: "net_revenue"
+        }),
+        source_message_id: expect.any(String),
+        source_clarification_id: clarificationId,
+        index_status: "pending"
+      }
+    ]);
+    const indexEvent = await admin.query(
+      `select payload from outbox_events
+       where aggregate_id = $1 and event_name = 'queue.knowledge.index.v1'`,
+      [memoryId]
+    );
+    expect(indexEvent.rows).toEqual([
+      {
+        payload: expect.objectContaining({
+          userId: aliceId,
+          datasetId,
+          datasetVersionId,
+          memoryId,
+          source: "confirmed-definition"
+        })
+      }
+    ]);
+  });
+
   it("enforces idempotency, one active run, durable event order, and replay", async () => {
     const conversationId = randomUUID();
     await repository.create(
@@ -327,6 +564,80 @@ describeIntegration("conversation repository and RLS", () => {
       limit: 100
     });
     expect(replay?.events.map((event) => event.sequence)).toEqual([3, 4]);
+  });
+
+  it("claims only bounded finalized history from the same conversation", async () => {
+    const conversationId = randomUUID();
+    await repository.create(
+      Conversation.create({ id: conversationId, userId: aliceId, now }).toPrimitives()
+    );
+    for (let turn = 1; turn <= 4; turn += 1) {
+      const submitted = await repository.enqueueMessage({
+        userId: aliceId,
+        conversationId,
+        messageId: randomUUID(),
+        runId: randomUUID(),
+        clientRequestId: randomUUID(),
+        content: `User turn ${turn} ${"u".repeat(5_000)}`,
+        correlationId: randomUUID(),
+        occurredAt: new Date(now.getTime() + turn * 3_000)
+      });
+      await repository.claimRun({
+        userId: aliceId,
+        conversationId,
+        runId: submitted.runId,
+        occurredAt: new Date(now.getTime() + turn * 3_000 + 1_000)
+      });
+      await repository.completeRun({
+        userId: aliceId,
+        conversationId,
+        runId: submitted.runId,
+        assistantMessageId: randomUUID(),
+        assistantText: `Assistant turn ${turn} ${"a".repeat(5_000)}`,
+        generatedTitle: "Bounded history",
+        occurredAt: new Date(now.getTime() + turn * 3_000 + 2_000)
+      });
+    }
+    const second = await repository.enqueueMessage({
+      userId: aliceId,
+      conversationId,
+      messageId: randomUUID(),
+      runId: randomUUID(),
+      clientRequestId: randomUUID(),
+      content: "What was previously done?",
+      correlationId: randomUUID(),
+      occurredAt: new Date(now.getTime() + 15_000)
+    });
+
+    const work = await repository.claimRun({
+      userId: aliceId,
+      conversationId,
+      runId: second.runId,
+      occurredAt: new Date(now.getTime() + 16_000)
+    });
+
+    expect(work?.conversationHistory).toHaveLength(6);
+    expect(work?.conversationHistory.map((message) => message.sequence)).toEqual([
+      3, 4, 5, 6, 7, 8
+    ]);
+    expect(
+      work?.conversationHistory.reduce(
+        (characters, message) => characters + message.content.length,
+        0
+      )
+    ).toBe(24_000);
+    expect(
+      work?.conversationHistory.every((message) => message.content.length === 4_000)
+    ).toBe(true);
+    expect(work?.conversationHistory).not.toContainEqual(
+      expect.objectContaining({ content: "What was previously done?" })
+    );
+    await repository.cancelRun({
+      userId: aliceId,
+      conversationId,
+      runId: second.runId,
+      occurredAt: new Date(now.getTime() + 17_000)
+    });
   });
 
   it("keeps finalized messages and run events immutable to the application role", async () => {

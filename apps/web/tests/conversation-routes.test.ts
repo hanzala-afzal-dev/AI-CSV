@@ -326,11 +326,28 @@ describe("conversation routes", () => {
       conversationId: state.conversationId,
       runId: state.runId,
       answer: "net_revenue",
+      saveAsDatasetDefinition: false,
       correlationId
     });
     await expect(response.json()).resolves.toMatchObject({
       data: { run: { id: state.runId, status: "queued" } }
     });
+
+    await submitClarificationRoute(
+      mutationRequest(path, {
+        answer: "net_revenue",
+        saveAsDatasetDefinition: true
+      }),
+      {
+        params: Promise.resolve({
+          conversationId: state.conversationId,
+          runId: state.runId
+        })
+      }
+    );
+    expect(state.conversationService.resumeRun).toHaveBeenLastCalledWith(
+      expect.objectContaining({ saveAsDatasetDefinition: true })
+    );
   });
 
   it("replays SSE after Last-Event-ID and releases the concurrent-stream lease", async () => {

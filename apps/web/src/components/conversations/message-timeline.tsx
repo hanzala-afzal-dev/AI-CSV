@@ -28,7 +28,7 @@ export function MessageTimeline({
   readonly datasetPanel: ReactNode;
   readonly progressText: string;
   readonly clarificationBusy: boolean;
-  readonly onClarification: (answer: string) => void;
+  readonly onClarification: (answer: string, saveAsDatasetDefinition: boolean) => void;
 }) {
   const endRef = useRef<HTMLDivElement>(null);
   useEffect(() => {

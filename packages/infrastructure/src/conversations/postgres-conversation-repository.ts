@@ -1,4 +1,5 @@
-import { and, asc, desc, eq, inArray, lt, or, sql } from "drizzle-orm";
+import { createHash } from "node:crypto";
+import { and, asc, desc, eq, inArray, isNull, lt, or, sql } from "drizzle-orm";
 import {
   ConversationError,
   type AgentRunView,
@@ -15,6 +16,7 @@ import {
 import {
   agentAnalysisStateSchema,
   agentClarificationOptionSchema,
+  confirmedDatasetDefinitionSchema,
   conversationMessageContentSchema
 } from "@agentic-csv/contracts";
 import {
@@ -32,6 +34,8 @@ import {
   conversationMessages,
   conversations,
   datasetVersions,
+  memoryContextHeads,
+  memoryRecords,
   outboxEvents,
   providerPreferences,
   runEvents
@@ -44,6 +48,10 @@ type MessageRow = typeof conversationMessages.$inferSelect;
 type RunRow = typeof agentRuns.$inferSelect;
 type EventRow = typeof runEvents.$inferSelect;
 type ClarificationRow = typeof agentClarifications.$inferSelect;
+
+const CONVERSATION_HISTORY_MESSAGE_LIMIT = 12;
+const CONVERSATION_HISTORY_CHARACTER_LIMIT = 24_000;
+const CONVERSATION_HISTORY_MESSAGE_CHARACTER_LIMIT = 4_000;
 
 export class PostgresConversationRepository implements ConversationRepository {
   public constructor(private readonly database: DatabaseClient) {}
@@ -248,12 +256,44 @@ export class PostgresConversationRepository implements ConversationRepository {
     });
   }
 
-  public delete(userId: string, conversationId: string): Promise<boolean> {
-    return this.executeForUser(userId, async (transaction) => {
+  public delete(
+    input: Parameters<ConversationRepository["delete"]>[0]
+  ): Promise<boolean> {
+    return this.executeForUser(input.userId, async (transaction) => {
+      const [conversation] = await transaction
+        .select({ id: conversations.id })
+        .from(conversations)
+        .where(
+          and(
+            eq(conversations.userId, input.userId),
+            eq(conversations.id, input.conversationId)
+          )
+        )
+        .limit(1)
+        .for("update");
+      if (!conversation) return false;
+      await transaction.insert(outboxEvents).values({
+        userId: input.userId,
+        aggregateId: input.conversationId,
+        eventName: "queue.knowledge.delete.v1",
+        payload: {
+          version: 1,
+          jobName: "knowledge.delete.v1",
+          correlationId: input.correlationId,
+          userId: input.userId,
+          idempotencyKey: `conversation-delete:${input.conversationId}`,
+          scope: "conversation",
+          conversationId: input.conversationId
+        },
+        occurredAt: input.occurredAt
+      });
       const deleted = await transaction
         .delete(conversations)
         .where(
-          and(eq(conversations.userId, userId), eq(conversations.id, conversationId))
+          and(
+            eq(conversations.userId, input.userId),
+            eq(conversations.id, input.conversationId)
+          )
         )
         .returning({ id: conversations.id });
       return deleted.length > 0;
@@ -439,12 +479,32 @@ export class PostgresConversationRepository implements ConversationRepository {
         )
         .limit(1);
       if (!message) throw new Error("Run user message is missing.");
+      const historyRows = await transaction
+        .select({
+          id: conversationMessages.id,
+          sequence: conversationMessages.sequence,
+          role: conversationMessages.role,
+          contentParts: conversationMessages.contentParts
+        })
+        .from(conversationMessages)
+        .where(
+          and(
+            eq(conversationMessages.userId, input.userId),
+            eq(conversationMessages.conversationId, input.conversationId),
+            lt(conversationMessages.sequence, message.sequence),
+            eq(conversationMessages.status, "final"),
+            inArray(conversationMessages.role, ["user", "assistant"])
+          )
+        )
+        .orderBy(desc(conversationMessages.sequence))
+        .limit(CONVERSATION_HISTORY_MESSAGE_LIMIT);
       return {
         userId: input.userId,
         conversationId: input.conversationId,
         runId: input.runId,
         userMessageId: run.userMessageId,
         content: extractText(message.contentParts),
+        conversationHistory: boundedConversationHistory(historyRows),
         selectedModel: run.selectedModel,
         selectedReasoningEffort: run.selectedReasoningEffort
       };
@@ -683,6 +743,18 @@ export class PostgresConversationRepository implements ConversationRepository {
         createdAt: input.occurredAt,
         finalizedAt: input.occurredAt
       });
+      if (input.saveAsDatasetDefinition) {
+        await saveConfirmedDefinition(transaction, {
+          userId: input.userId,
+          conversation,
+          clarification,
+          answer: input.answer,
+          sourceMessageId: input.answerMessageId,
+          memoryId: input.memoryId,
+          correlationId: input.correlationId,
+          occurredAt: input.occurredAt
+        });
+      }
       await transaction
         .update(agentClarifications)
         .set({
@@ -999,6 +1071,152 @@ function mapConversation(row: ConversationRow): ConversationProps {
   };
 }
 
+async function saveConfirmedDefinition(
+  transaction: DatabaseTransaction,
+  input: {
+    readonly userId: string;
+    readonly conversation: ConversationRow;
+    readonly clarification: ClarificationRow;
+    readonly answer: string;
+    readonly sourceMessageId: string;
+    readonly memoryId: string;
+    readonly correlationId: string;
+    readonly occurredAt: Date;
+  }
+): Promise<void> {
+  const datasetId = input.conversation.activeDatasetId;
+  const datasetVersionId = input.conversation.activeDatasetVersionId;
+  const alias = definitionAlias(input.clarification.question);
+  const options = parseClarificationOptions(input.clarification.options);
+  const normalizedAnswer = normalizeMemoryTerm(input.answer);
+  const selected = options.find(
+    (option) =>
+      option.columnId &&
+      (normalizeMemoryTerm(option.value) === normalizedAnswer ||
+        normalizedAnswer.includes(normalizeMemoryTerm(option.label)))
+  );
+  if (!datasetId || !datasetVersionId || !alias || !selected?.columnId) {
+    throw new ConversationError(
+      "CONVERSATION_DEFINITION_INVALID",
+      "Select a dataset column before saving this answer as a reusable definition."
+    );
+  }
+  const definition = confirmedDatasetDefinitionSchema.parse({
+    version: 1,
+    alias,
+    columnId: selected.columnId,
+    columnName: selected.value,
+    clarificationId: input.clarification.id,
+    sourceMessageId: input.sourceMessageId
+  });
+  const content = `Confirmed dataset definition: ${alias} means ${selected.value}.`;
+  const contentHash = createHash("sha256").update(content).digest("hex");
+  const definitionKey = normalizeMemoryTerm(alias);
+  const [existing] = await transaction
+    .select({ id: memoryRecords.id })
+    .from(memoryRecords)
+    .where(
+      and(
+        eq(memoryRecords.userId, input.userId),
+        eq(memoryRecords.datasetVersionId, datasetVersionId),
+        eq(memoryRecords.definitionKey, definitionKey),
+        isNull(memoryRecords.deletedAt)
+      )
+    )
+    .limit(1)
+    .for("update");
+  const memoryId = existing?.id ?? input.memoryId;
+  if (existing) {
+    await transaction
+      .update(memoryRecords)
+      .set({
+        conversationId: input.conversation.id,
+        sourceMessageId: input.sourceMessageId,
+        sourceClarificationId: input.clarification.id,
+        content,
+        definition,
+        contentHash,
+        indexStatus: "pending",
+        embeddingModel: null,
+        failureCode: null,
+        indexedAt: null,
+        updatedAt: input.occurredAt
+      })
+      .where(eq(memoryRecords.id, memoryId));
+  } else {
+    await transaction.insert(memoryRecords).values({
+      id: memoryId,
+      userId: input.userId,
+      datasetId,
+      datasetVersionId,
+      conversationId: input.conversation.id,
+      sourceMessageId: input.sourceMessageId,
+      sourceClarificationId: input.clarification.id,
+      kind: "definition",
+      confidence: "confirmed",
+      definitionKey,
+      content,
+      definition,
+      contentHash,
+      schemaVersion: 1,
+      indexStatus: "pending",
+      createdAt: input.occurredAt,
+      updatedAt: input.occurredAt
+    });
+  }
+  await transaction
+    .insert(memoryContextHeads)
+    .values({
+      userId: input.userId,
+      datasetId,
+      datasetVersionId,
+      revision: 1,
+      updatedAt: input.occurredAt
+    })
+    .onConflictDoUpdate({
+      target: [
+        memoryContextHeads.userId,
+        memoryContextHeads.datasetId,
+        memoryContextHeads.datasetVersionId
+      ],
+      set: {
+        revision: sql`${memoryContextHeads.revision} + 1`,
+        updatedAt: input.occurredAt
+      }
+    });
+  await transaction.insert(outboxEvents).values({
+    userId: input.userId,
+    aggregateId: memoryId,
+    eventName: "queue.knowledge.index.v1",
+    payload: {
+      version: 1,
+      jobName: "knowledge.index.v1",
+      correlationId: input.correlationId,
+      userId: input.userId,
+      idempotencyKey: `confirmed-definition:${memoryId}:${contentHash}`,
+      source: "confirmed-definition",
+      datasetId,
+      datasetVersionId,
+      memoryId
+    },
+    occurredAt: input.occurredAt
+  });
+}
+
+function definitionAlias(question: string): string | null {
+  return question === "Which revenue definition should be used for this analysis?"
+    ? "revenue"
+    : null;
+}
+
+function normalizeMemoryTerm(value: string): string {
+  return value
+    .normalize("NFKC")
+    .toLocaleLowerCase("en-US")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
 function mapMessage(row: MessageRow): ConversationMessageView {
   return {
     id: row.id,
@@ -1074,6 +1292,43 @@ function extractText(value: unknown): string {
   const text = content.parts.find((part) => part.type === "text");
   if (!text || text.type !== "text") throw new Error("Message has no text content.");
   return text.text;
+}
+
+function boundedConversationHistory(
+  rows: readonly {
+    readonly id: string;
+    readonly sequence: number;
+    readonly role: "user" | "assistant" | "system_event" | "tool";
+    readonly contentParts: unknown;
+  }[]
+) {
+  let remainingCharacters = CONVERSATION_HISTORY_CHARACTER_LIMIT;
+  const selected: {
+    messageId: string;
+    sequence: number;
+    role: "user" | "assistant";
+    content: string;
+  }[] = [];
+  for (const row of rows) {
+    if (row.role !== "user" && row.role !== "assistant") continue;
+    const content = extractText(row.contentParts)
+      .trim()
+      .slice(
+        0,
+        Math.min(CONVERSATION_HISTORY_MESSAGE_CHARACTER_LIMIT, remainingCharacters)
+      )
+      .trim();
+    if (!content) continue;
+    selected.push({
+      messageId: row.id,
+      sequence: row.sequence,
+      role: row.role,
+      content
+    });
+    remainingCharacters -= content.length;
+    if (remainingCharacters <= 0) break;
+  }
+  return selected.reverse();
 }
 
 function isRunEventType(value: string): value is RunEventType {

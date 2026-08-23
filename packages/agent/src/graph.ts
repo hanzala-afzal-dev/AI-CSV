@@ -8,7 +8,8 @@ import {
   type CompletedAnalysis,
   type ConversationRepository,
   type ConversationResponder,
-  type ConversationResponderResult
+  type ConversationResponderResult,
+  type SemanticMemoryRetriever
 } from "@agentic-csv/application";
 import {
   agentAnalysisStateSchema,
@@ -38,6 +39,7 @@ interface GraphDependencies {
   readonly analysis: AnalysisService;
   readonly conversations: ConversationRepository;
   readonly model: AgentModelSession;
+  readonly memory: SemanticMemoryRetriever;
   readonly policy: AgentGraphPolicy;
   readonly now: () => Date;
   readonly createId: () => string;
@@ -51,7 +53,8 @@ export class LangGraphConversationResponder implements ConversationResponder {
     private readonly conversations: ConversationRepository,
     private readonly policy: AgentGraphPolicy,
     private readonly now: () => Date = () => new Date(),
-    private readonly createId: () => string = createUuidV7
+    private readonly createId: () => string = createUuidV7,
+    private readonly memory: SemanticMemoryRetriever = emptyMemoryRetriever
   ) {}
 
   public async respond(
@@ -74,6 +77,7 @@ export class LangGraphConversationResponder implements ConversationResponder {
           analysis: this.analysis,
           conversations: this.conversations,
           model,
+          memory: this.memory,
           policy: this.policy,
           now: this.now,
           createId: this.createId
@@ -132,12 +136,14 @@ function createAnalysisGraph(
       stage: AgentProgressStage,
       message: string,
       work: (state: AnalysisRuntimeState) => Promise<AnalysisRuntimeState>,
-      toolCalls = 0
+      toolCalls: number | ((state: AnalysisRuntimeState) => number) = 0
     ) =>
     async ({ value }: { value: AnalysisRuntimeState }) => {
       await assertActive(value, dependencies);
       const nextStep = value.snapshot.stepCount + 1;
-      const nextTools = value.snapshot.toolCallCount + toolCalls;
+      const toolCallIncrement =
+        typeof toolCalls === "function" ? toolCalls(value) : toolCalls;
+      const nextTools = value.snapshot.toolCallCount + toolCallIncrement;
       if (
         nextStep > dependencies.policy.maxSteps ||
         nextTools > dependencies.policy.maxToolCalls
@@ -207,7 +213,26 @@ function createAnalysisGraph(
   const retrieveContext = node(
     "planning",
     "Preparing bounded analytical context",
-    async (state) => withSnapshot(state, { retrievedContext: [] })
+    async (state) => {
+      if (state.snapshot.intent === "conversation_history") {
+        return withSnapshot(state, { retrievedContext: [] });
+      }
+      if (!state.snapshot.datasetId || !state.snapshot.datasetVersionId) {
+        throw new AgentError(
+          "AGENT_CHECKPOINT_INVALID",
+          "The authorized dataset context is missing."
+        );
+      }
+      const context = await dependencies.memory.retrieve({
+        userId: state.snapshot.userId,
+        conversationId: state.snapshot.conversationId,
+        datasetId: state.snapshot.datasetId,
+        datasetVersionId: state.snapshot.datasetVersionId,
+        question: state.snapshot.question
+      });
+      return withSnapshot(state, { retrievedContext: [...context.items] });
+    },
+    (state) => (state.snapshot.intent === "conversation_history" ? 0 : 1)
   );
 
   const createPlan = node(
@@ -231,6 +256,8 @@ function createAnalysisGraph(
       const decision = await dependencies.model.createPlan({
         question: state.snapshot.question,
         columns: state.snapshot.columns,
+        conversationHistory: state.snapshot.conversationHistory,
+        retrievedContext: state.snapshot.retrievedContext,
         clarification: state.snapshot.clarification,
         validationErrors: state.snapshot.validationErrors
       });
@@ -262,6 +289,18 @@ function createAnalysisGraph(
         return repairState(state, planningValidationErrors(parsedDecision.error.issues));
       }
       const validatedDecision = parsedDecision.data;
+      if (validatedDecision.intent === "conversation_history") {
+        if (!validatedDecision.directResponse) {
+          return repairState(state, [
+            "A conversation history request requires a grounded direct response."
+          ]);
+        }
+        return {
+          ...state,
+          outcome: "direct_response" as const,
+          finalText: validatedDecision.directResponse
+        };
+      }
       if (validatedDecision.intent === "unsupported") {
         if (isExecutableAnalyticalRequest(state.snapshot.question)) {
           return repairState(state, [
@@ -328,6 +367,8 @@ function createAnalysisGraph(
       const decision = await dependencies.model.createPlan({
         question: repaired.snapshot.question,
         columns: repaired.snapshot.columns,
+        conversationHistory: repaired.snapshot.conversationHistory,
+        retrievedContext: repaired.snapshot.retrievedContext,
         clarification: repaired.snapshot.clarification,
         validationErrors: repaired.snapshot.validationErrors
       });
@@ -446,7 +487,10 @@ function createAnalysisGraph(
         return {
           ...state,
           explanation,
-          finalText: materializeExplanation(explanation, analysis)
+          finalText: discloseAppliedMemory(
+            materializeExplanation(explanation, analysis),
+            state.snapshot
+          )
         };
       } catch (error) {
         if (
@@ -457,8 +501,10 @@ function createAnalysisGraph(
         }
         return {
           ...state,
-          finalText:
+          finalText: discloseAppliedMemory(
             "The verified analysis completed, but OpenAI could not format the explanation. Review the result and chart below.",
+            state.snapshot
+          ),
           snapshot: agentAnalysisStateSchema.parse({
             ...state.snapshot,
             warnings: [
@@ -547,6 +593,7 @@ function initialSnapshot(
     datasetName: null,
     originalFilename: null,
     columns: [],
+    conversationHistory: [...input.conversationHistory],
     retrievedContext: [],
     intent: null,
     plan: null,
@@ -597,7 +644,8 @@ function planningValidationErrors(
 
 function validationRoute(state: AnalysisRuntimeState) {
   if (state.outcome === "waiting_for_user") return "clarification_interrupt" as const;
-  if (state.outcome === "unsupported") return "persist_output" as const;
+  if (["direct_response", "unsupported"].includes(state.outcome))
+    return "persist_output" as const;
   if (state.snapshot.validationErrors.length > 0) return "repair_plan" as const;
   return "compile_query" as const;
 }
@@ -628,6 +676,7 @@ function localMaterialAmbiguity(
   const existing = snapshot.clarification;
   if (existing?.status === "answered" && existing.answer) return null;
   const question = normalize(snapshot.question);
+  if (rememberedDefinition(snapshot, "revenue")) return null;
   const revenueColumns = snapshot.columns.filter((column) =>
     normalize(column.canonicalName).includes("revenue")
   );
@@ -688,6 +737,15 @@ function validatePlanColumns(
     if (!known.has(id))
       errors.push(`Column ${id} does not belong to the active dataset version.`);
   }
+  for (const item of snapshot.retrievedContext) {
+    const definition = item.definition;
+    if (!definition || !questionMentions(snapshot.question, definition.alias)) continue;
+    if (!plan.measures.some((measure) => measure.columnId === definition.columnId)) {
+      errors.push(
+        `The plan must use confirmed definition ${definition.alias} = ${definition.columnName} (${definition.columnId}).`
+      );
+    }
+  }
   const answered = snapshot.clarification;
   if (answered?.status === "answered" && answered.answer) {
     const selected = answered.options.find((option) => {
@@ -712,6 +770,37 @@ function validatePlanColumns(
   }
   return errors.slice(0, 16);
 }
+
+function discloseAppliedMemory(
+  text: string,
+  snapshot: AgentAnalysisStateContract
+): string {
+  const disclosures = snapshot.retrievedContext.flatMap((item) => {
+    const definition = item.definition;
+    if (!definition || !questionMentions(snapshot.question, definition.alias)) return [];
+    return [
+      `Remembered definition applied: ${definition.alias} means ${definition.columnName}.`
+    ];
+  });
+  return [...new Set(disclosures), text].join("\n\n").slice(0, 16_000);
+}
+
+function rememberedDefinition(snapshot: AgentAnalysisStateContract, alias: string) {
+  return snapshot.retrievedContext.find(
+    (item) =>
+      item.definition &&
+      normalize(item.definition.alias) === normalize(alias) &&
+      snapshot.columns.some((column) => column.id === item.definition?.columnId)
+  );
+}
+
+function questionMentions(question: string, alias: string): boolean {
+  return ` ${normalize(question)} `.includes(` ${normalize(alias)} `);
+}
+
+const emptyMemoryRetriever: SemanticMemoryRetriever = {
+  retrieve: async () => ({ version: 1, revision: 0, items: [] })
+};
 
 function requireAnalysis(state: AnalysisRuntimeState): CompletedAnalysis {
   if (!state.analysis) {
@@ -754,6 +843,13 @@ function formatValue(value: unknown): string {
 
 function classifyIntentLocally(question: string): AgentAnalysisStateContract["intent"] {
   const normalized = normalize(question);
+  if (
+    /\b(previous|previously|earlier|prior|before|history|recap|recall|last (?:thing|request|analysis|result))\b/.test(
+      normalized
+    )
+  ) {
+    return "conversation_history";
+  }
   if (/correlat|relationship/.test(normalized)) return "correlation";
   if (/trend|over time|monthly|weekly|yearly/.test(normalized)) return "trend";
   if (/missing|null|quality/.test(normalized)) return "data_quality";

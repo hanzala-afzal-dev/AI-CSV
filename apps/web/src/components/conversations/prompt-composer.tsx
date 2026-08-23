@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ArrowUp, Paperclip, Square } from "lucide-react";
 import type { AgentRunSummaryContract } from "@agentic-csv/contracts";
 import { Alert } from "@/components/ui/alert";
@@ -35,6 +35,12 @@ export function PromptComposer({
   readonly run: AgentRunSummaryContract | null;
 }) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [hydrated, setHydrated] = useState(false);
+
+  useEffect(() => {
+    setHydrated(true);
+  }, []);
+
   useEffect(() => {
     const textarea = textareaRef.current;
     if (!textarea) return;
@@ -104,7 +110,7 @@ export function PromptComposer({
               size="icon"
               className="size-9"
               aria-label="Attach CSV"
-              disabled={attachmentDisabled}
+              disabled={!hydrated || attachmentDisabled}
               onClick={onAttach}
             >
               <Paperclip size={18} />

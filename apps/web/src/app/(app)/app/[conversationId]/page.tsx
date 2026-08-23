@@ -5,5 +5,9 @@ export default async function ConversationPage({
 }: {
   readonly params: Promise<{ readonly conversationId: string }>;
 }) {
-  return <ConversationWorkspace initialConversationId={(await params).conversationId} />;
+  const { conversationId } = await params;
+
+  return (
+    <ConversationWorkspace key={conversationId} initialConversationId={conversationId} />
+  );
 }

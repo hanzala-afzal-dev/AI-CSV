@@ -2,7 +2,9 @@ import { Queue } from "bullmq";
 import type { JobsOptions, QueueOptions } from "bullmq";
 import type {
   AgentRunJobPayload,
-  DatasetIngestionJobPayload
+  DatasetIngestionJobPayload,
+  KnowledgeDeleteJobPayload,
+  KnowledgeIndexJobPayload
 } from "@agentic-csv/contracts";
 import type { AppEnv } from "../config/env";
 import { createBullMqConnectionOptions } from "../redis/client";
@@ -11,6 +13,7 @@ export const queueNames = {
   datasetIngestion: "dataset-ingestion",
   agentRun: "agent-run",
   knowledgeIndexing: "knowledge-indexing",
+  knowledgeDeletion: "knowledge-deletion",
   outboxPublishing: "outbox-publishing"
 } as const;
 
@@ -51,4 +54,18 @@ export function createDatasetIngestionQueue(env: AppEnv) {
 
 export function createAgentRunQueue(env: AppEnv) {
   return new Queue<AgentRunJobPayload>(queueNames.agentRun, queueOptions(env));
+}
+
+export function createKnowledgeIndexQueue(env: AppEnv) {
+  return new Queue<KnowledgeIndexJobPayload>(
+    queueNames.knowledgeIndexing,
+    queueOptions(env)
+  );
+}
+
+export function createKnowledgeDeleteQueue(env: AppEnv) {
+  return new Queue<KnowledgeDeleteJobPayload>(
+    queueNames.knowledgeDeletion,
+    queueOptions(env)
+  );
 }

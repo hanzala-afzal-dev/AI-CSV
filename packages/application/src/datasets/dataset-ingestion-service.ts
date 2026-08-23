@@ -31,7 +31,12 @@ export class DatasetIngestionService {
 
     const work = claim.work;
     if (work.objectKey !== payload.objectKey) {
-      await this.fail(work, claimId, "DATASET_JOB_CONTEXT_INVALID");
+      await this.fail(
+        work,
+        claimId,
+        payload.correlationId,
+        "DATASET_JOB_CONTEXT_INVALID"
+      );
       return "failed_validation";
     }
 
@@ -42,11 +47,18 @@ export class DatasetIngestionService {
         metadata.checksumSha256 !== work.checksumSha256 ||
         metadata.contentType?.toLowerCase() !== work.mimeType.toLowerCase()
       ) {
-        await this.fail(work, claimId, "DATASET_OBJECT_METADATA_MISMATCH");
+        await this.fail(
+          work,
+          claimId,
+          payload.correlationId,
+          "DATASET_OBJECT_METADATA_MISMATCH"
+        );
         return "failed_validation";
       }
 
-      await this.repository.markProfiling(mutationInput(work, claimId, this.now()));
+      await this.repository.markProfiling(
+        mutationInput(work, claimId, payload.correlationId, this.now())
+      );
       const content = await this.objectStorage.readObject(work.objectKey);
       const profile = await this.profiler.profile({
         content,
@@ -54,15 +66,17 @@ export class DatasetIngestionService {
         declaredSizeBytes: work.sizeBytes,
         expectedChecksumSha256: work.checksumSha256
       });
-      await this.repository.markIndexing(mutationInput(work, claimId, this.now()));
+      await this.repository.markIndexing(
+        mutationInput(work, claimId, payload.correlationId, this.now())
+      );
       await this.repository.complete({
-        ...mutationInput(work, claimId, this.now()),
+        ...mutationInput(work, claimId, payload.correlationId, this.now()),
         profile
       });
       return "completed";
     } catch (error) {
       if (error instanceof DatasetFileValidationError) {
-        await this.fail(work, claimId, error.code);
+        await this.fail(work, claimId, payload.correlationId, error.code);
         return "failed_validation";
       }
       throw error;
@@ -78,6 +92,7 @@ export class DatasetIngestionService {
       datasetId: payload.datasetId,
       datasetVersionId: payload.datasetVersionId,
       claimId,
+      correlationId: payload.correlationId,
       occurredAt: this.now(),
       code: "DATASET_PROCESSING_FAILED"
     });
@@ -90,10 +105,11 @@ export class DatasetIngestionService {
       readonly datasetVersionId: string;
     },
     claimId: string,
+    correlationId: string,
     code: Parameters<DatasetIngestionRepository["fail"]>[0]["code"]
   ) {
     return this.repository.fail({
-      ...mutationInput(work, claimId, this.now()),
+      ...mutationInput(work, claimId, correlationId, this.now()),
       code
     });
   }
@@ -106,6 +122,7 @@ function mutationInput(
     readonly datasetVersionId: string;
   },
   claimId: string,
+  correlationId: string,
   occurredAt: Date
 ) {
   return {
@@ -113,6 +130,7 @@ function mutationInput(
     datasetId: work.datasetId,
     datasetVersionId: work.datasetVersionId,
     claimId,
+    correlationId,
     occurredAt
   };
 }

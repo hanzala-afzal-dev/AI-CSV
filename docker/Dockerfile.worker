@@ -36,5 +36,6 @@ COPY --from=builder --chown=worker:nodejs /app/drizzle.config.ts ./drizzle.confi
 COPY --from=builder --chown=worker:nodejs /app/node_modules ./node_modules
 COPY --from=builder --chown=worker:nodejs /app/packages ./packages
 COPY --from=builder --chown=worker:nodejs /app/apps/worker ./apps/worker
+COPY --from=builder --chown=worker:nodejs /app/knowledge-base ./knowledge-base
 USER worker
 CMD ["node", "apps/worker/dist/index.js"]

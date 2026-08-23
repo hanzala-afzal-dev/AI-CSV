@@ -44,7 +44,10 @@ export const submitConversationMessageRequestSchema = z
   })
   .strict();
 export const submitClarificationRequestSchema = z
-  .object({ answer: messageTextSchema.max(2_000) })
+  .object({
+    answer: messageTextSchema.max(2_000),
+    saveAsDatasetDefinition: z.boolean().default(false)
+  })
   .strict();
 
 export const conversationListQuerySchema = z

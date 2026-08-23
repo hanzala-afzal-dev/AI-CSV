@@ -46,7 +46,7 @@ services:
       - agentic-csv
 
   qdrant:
-    image: qdrant/qdrant:v1.16.3
+    image: qdrant/qdrant:v1.17.1
     ports:
       - "${QDRANT_PORT:-6333}:6333"
       - "${QDRANT_GRPC_PORT:-6334}:6334"
@@ -115,7 +115,14 @@ services:
     <<: *env-files
     profiles: ["app"]
     init: true
-    command: ["pnpm", "turbo", "dev", "--env-mode=loose", "--filter=@agentic-csv/web..."]
+    command:
+      - "sh"
+      - "-c"
+      - >-
+        pnpm turbo build --env-mode=loose
+        --filter=@agentic-csv/application
+        --filter=@agentic-csv/infrastructure
+        && exec pnpm turbo dev --env-mode=loose --filter=@agentic-csv/web...
     build:
       context: ..
       dockerfile: docker/Dockerfile.web
@@ -186,7 +193,13 @@ services:
     profiles: ["app"]
     init: true
     command:
-      ["pnpm", "turbo", "dev", "--env-mode=loose", "--filter=@agentic-csv/worker..."]
+      - "sh"
+      - "-c"
+      - >-
+        pnpm turbo build --env-mode=loose
+        --filter=@agentic-csv/agent
+        --filter=@agentic-csv/infrastructure
+        && exec pnpm turbo dev --env-mode=loose --filter=@agentic-csv/worker...
     build:
       context: ..
       dockerfile: docker/Dockerfile.worker
@@ -210,6 +223,7 @@ services:
       - ../packages/infrastructure/src:/app/packages/infrastructure/src:ro
       - ../packages/infrastructure/tsconfig.json:/app/packages/infrastructure/tsconfig.json:ro
       - ../packages/infrastructure/drizzle:/app/packages/infrastructure/drizzle:ro
+      - ../knowledge-base:/app/knowledge-base:ro
     depends_on:
       migrate:
         condition: service_completed_successfully

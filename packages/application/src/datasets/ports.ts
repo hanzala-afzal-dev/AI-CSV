@@ -113,6 +113,7 @@ export interface IngestionMutationInput {
   readonly datasetId: string;
   readonly datasetVersionId: string;
   readonly claimId: string;
+  readonly correlationId?: string;
   readonly occurredAt: Date;
 }
 

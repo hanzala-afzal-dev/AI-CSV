@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import type {
   ConversationDatasetContext,
@@ -22,7 +23,10 @@ import {
   datasetColumns,
   datasetProfiles,
   datasetVersions,
-  datasets
+  datasets,
+  memoryContextHeads,
+  outboxEvents,
+  semanticDocuments
 } from "../../drizzle/schema";
 import type { DatabaseClient } from "../database/client";
 
@@ -319,20 +323,23 @@ export class PostgresDatasetRepository
             eq(datasetProfiles.datasetVersionId, input.datasetVersionId)
           )
         );
-      await transaction.insert(datasetColumns).values(
-        input.profile.columns.map((column) => ({
-          userId: input.userId,
-          datasetId: input.datasetId,
-          datasetVersionId: input.datasetVersionId,
-          ordinal: column.ordinal,
-          originalName: column.originalName,
-          canonicalName: column.canonicalName,
-          inferredType: column.inferredType,
-          semanticType: column.semanticType,
-          nullable: column.nullable,
-          statistics: column.statistics
-        }))
-      );
+      const storedColumns = await transaction
+        .insert(datasetColumns)
+        .values(
+          input.profile.columns.map((column) => ({
+            userId: input.userId,
+            datasetId: input.datasetId,
+            datasetVersionId: input.datasetVersionId,
+            ordinal: column.ordinal,
+            originalName: column.originalName,
+            canonicalName: column.canonicalName,
+            inferredType: column.inferredType,
+            semanticType: column.semanticType,
+            nullable: column.nullable,
+            statistics: column.statistics
+          }))
+        )
+        .returning();
       await transaction.insert(datasetProfiles).values({
         userId: input.userId,
         datasetId: input.datasetId,
@@ -341,6 +348,48 @@ export class PostgresDatasetRepository
         warnings: input.profile.warnings,
         suggestedPrompts: input.profile.suggestedPrompts,
         generatedAt: new Date(input.profile.generatedAt)
+      });
+      const [dataset] = await transaction
+        .select({ name: datasets.name })
+        .from(datasets)
+        .where(and(eq(datasets.userId, input.userId), eq(datasets.id, input.datasetId)))
+        .limit(1);
+      if (!dataset)
+        throw new Error("Dataset was not found while creating semantic documents.");
+      const documents = semanticProfileDocuments({
+        userId: input.userId,
+        datasetId: input.datasetId,
+        datasetVersionId: input.datasetVersionId,
+        datasetName: dataset.name,
+        profile: input.profile,
+        columns: storedColumns
+      });
+      await transaction.insert(semanticDocuments).values(documents);
+      await transaction
+        .insert(memoryContextHeads)
+        .values({
+          userId: input.userId,
+          datasetId: input.datasetId,
+          datasetVersionId: input.datasetVersionId,
+          revision: 0,
+          updatedAt: input.occurredAt
+        })
+        .onConflictDoNothing();
+      await transaction.insert(outboxEvents).values({
+        userId: input.userId,
+        aggregateId: input.datasetVersionId,
+        eventName: "queue.knowledge.index.v1",
+        payload: {
+          version: 1,
+          jobName: "knowledge.index.v1",
+          correlationId: input.correlationId ?? input.datasetVersionId,
+          userId: input.userId,
+          idempotencyKey: `dataset-schema:${input.datasetVersionId}:v${input.profile.version}`,
+          source: "dataset-schema",
+          datasetId: input.datasetId,
+          datasetVersionId: input.datasetVersionId
+        },
+        occurredAt: input.occurredAt
       });
       await transaction
         .update(datasetVersions)
@@ -524,6 +573,75 @@ function mapColumn(
     nullable: row.nullable,
     statistics: row.statistics
   });
+}
+
+function semanticProfileDocuments(input: {
+  readonly userId: string;
+  readonly datasetId: string;
+  readonly datasetVersionId: string;
+  readonly datasetName: string;
+  readonly profile: DatasetProfileContract;
+  readonly columns: readonly (typeof datasetColumns.$inferSelect)[];
+}) {
+  const datasetContent = JSON.stringify({
+    kind: "dataset_description",
+    name: input.datasetName,
+    rowCount: input.profile.rowCount,
+    columnCount: input.profile.columnCount,
+    encoding: input.profile.encoding,
+    delimiter: input.profile.delimiter,
+    columns: input.columns.map((column) => column.canonicalName)
+  }).slice(0, 4_000);
+  const common = {
+    userId: input.userId,
+    datasetId: input.datasetId,
+    datasetVersionId: input.datasetVersionId,
+    schemaVersion: 1,
+    indexStatus: "pending" as const
+  };
+  return [
+    {
+      ...common,
+      sourceId: input.datasetVersionId,
+      documentType: "dataset_description",
+      content: datasetContent,
+      contentHash: sha256(datasetContent)
+    },
+    ...input.columns.map((column) => {
+      const statistics = datasetColumnProfileSchema.parse({
+        ordinal: column.ordinal,
+        originalName: column.originalName,
+        canonicalName: column.canonicalName,
+        inferredType: column.inferredType,
+        semanticType: column.semanticType,
+        nullable: column.nullable,
+        statistics: column.statistics
+      }).statistics;
+      const content = JSON.stringify({
+        kind: "column_profile",
+        datasetName: input.datasetName,
+        originalName: column.originalName,
+        canonicalName: column.canonicalName,
+        inferredType: column.inferredType,
+        semanticType: column.semanticType,
+        nullable: column.nullable,
+        nullCount: statistics.nullCount,
+        nullPercentage: statistics.nullPercentage,
+        distinctCount: statistics.distinctCount
+      }).slice(0, 4_000);
+      return {
+        ...common,
+        sourceId: column.id,
+        documentType: "column_profile",
+        content,
+        contentHash: sha256(content)
+      };
+    })
+  ];
+}
+
+function sha256(value: string): string {
+  return createHash("sha256").update(value).digest("hex");
 }
 
 async function requireClaim(

@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { agentRunJobPayloadSchema, datasetIngestionJobPayloadSchema } from "../src";
+import {
+  agentRunJobPayloadSchema,
+  datasetIngestionJobPayloadSchema,
+  knowledgeDeleteJobPayloadSchema,
+  knowledgeIndexJobPayloadSchema
+} from "../src";
 
 describe("dataset ingestion queue contract", () => {
   it("accepts a versioned dataset ingestion payload", () => {
@@ -43,6 +48,36 @@ describe("agent run queue contract", () => {
     expect(parsed.jobName).toBe("agent.run.v1");
     expect(() =>
       agentRunJobPayloadSchema.parse({ ...parsed, userId: undefined })
+    ).toThrow();
+  });
+});
+
+describe("knowledge queue contracts", () => {
+  it("requires dataset/version scope for indexing", () => {
+    expect(
+      knowledgeIndexJobPayloadSchema.parse({
+        version: 1,
+        jobName: "knowledge.index.v1",
+        correlationId: "correlation-1",
+        userId: "11111111-1111-4111-8111-111111111111",
+        idempotencyKey: "dataset-schema-version-1",
+        source: "dataset-schema",
+        datasetId: "22222222-2222-4222-8222-222222222222",
+        datasetVersionId: "33333333-3333-4333-8333-333333333333"
+      }).source
+    ).toBe("dataset-schema");
+  });
+
+  it("requires the resource ID matching a deletion scope", () => {
+    expect(() =>
+      knowledgeDeleteJobPayloadSchema.parse({
+        version: 1,
+        jobName: "knowledge.delete.v1",
+        correlationId: "correlation-1",
+        userId: "11111111-1111-4111-8111-111111111111",
+        idempotencyKey: "conversation-delete-missing",
+        scope: "conversation"
+      })
     ).toThrow();
   });
 });

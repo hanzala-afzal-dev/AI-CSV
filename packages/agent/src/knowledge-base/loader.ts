@@ -1,38 +1,54 @@
-import { readdir, readFile } from "node:fs/promises";
-import { join } from "node:path";
+import { readFile, realpath } from "node:fs/promises";
+import { isAbsolute, relative, resolve, sep } from "node:path";
 
 export interface KnowledgeDocument {
   readonly path: string;
   readonly content: string;
 }
 
-export async function loadMarkdownKnowledgeDocuments(
-  rootDirectory: string
-): Promise<KnowledgeDocument[]> {
-  const documents: KnowledgeDocument[] = [];
-  await collectMarkdown(rootDirectory, rootDirectory, documents);
-  return documents;
+export const trustedAgentPolicyPaths = [
+  "policies/analytical-safety.md",
+  "policies/tenant-isolation.md",
+  "policies/prompt-injection.md",
+  "policies/chart-selection.md"
+] as const;
+
+const MAX_POLICY_CHARACTERS = 32_000;
+const MAX_COMBINED_POLICY_CHARACTERS = 96_000;
+
+export async function loadTrustedAgentPolicies(rootDirectory: string): Promise<string> {
+  const canonicalRoot = await realpath(rootDirectory);
+  const documents = await Promise.all(
+    trustedAgentPolicyPaths.map((path) => loadPolicy(canonicalRoot, path))
+  );
+  const policy = documents
+    .map((document) => `Policy: ${document.path}\n${document.content.trim()}`)
+    .join("\n\n");
+
+  if (policy.length > MAX_COMBINED_POLICY_CHARACTERS) {
+    throw new Error("Trusted agent policies exceed the combined size limit.");
+  }
+  return policy;
 }
 
-async function collectMarkdown(
-  rootDirectory: string,
-  currentDirectory: string,
-  documents: KnowledgeDocument[]
-): Promise<void> {
-  const entries = await readdir(currentDirectory, { withFileTypes: true });
-
-  for (const entry of entries) {
-    const absolutePath = join(currentDirectory, entry.name);
-    if (entry.isDirectory()) {
-      await collectMarkdown(rootDirectory, absolutePath, documents);
-      continue;
-    }
-
-    if (entry.isFile() && entry.name.endsWith(".md")) {
-      documents.push({
-        path: absolutePath.replace(`${rootDirectory}/`, ""),
-        content: await readFile(absolutePath, "utf8")
-      });
-    }
+async function loadPolicy(
+  canonicalRoot: string,
+  policyPath: (typeof trustedAgentPolicyPaths)[number]
+): Promise<KnowledgeDocument> {
+  const canonicalPath = await realpath(resolve(canonicalRoot, policyPath));
+  const relativePath = relative(canonicalRoot, canonicalPath);
+  if (
+    relativePath.length === 0 ||
+    relativePath === ".." ||
+    relativePath.startsWith(`..${sep}`) ||
+    isAbsolute(relativePath)
+  ) {
+    throw new Error(`Trusted policy resolves outside the knowledge base: ${policyPath}`);
   }
+
+  const content = await readFile(canonicalPath, "utf8");
+  if (content.length === 0 || content.length > MAX_POLICY_CHARACTERS) {
+    throw new Error(`Trusted policy has an invalid size: ${policyPath}`);
+  }
+  return { path: policyPath, content };
 }

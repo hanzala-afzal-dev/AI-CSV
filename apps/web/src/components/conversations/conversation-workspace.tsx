@@ -490,12 +490,20 @@ export function ConversationWorkspace({
     }
   };
 
-  const answerClarification = async (answer: string) => {
+  const answerClarification = async (
+    answer: string,
+    saveAsDatasetDefinition: boolean
+  ) => {
     if (!run || run.status !== "waiting_for_user" || clarificationBusy) return;
     setClarificationBusy(true);
     setRunError(null);
     try {
-      const resumed = await submitClarification(run.conversationId, run.id, answer);
+      const resumed = await submitClarification(
+        run.conversationId,
+        run.id,
+        answer,
+        saveAsDatasetDefinition
+      );
       setProgressText("Resuming analysis");
       setRun(resumed);
       await loadDetail(run.conversationId);
@@ -745,7 +753,9 @@ export function ConversationWorkspace({
             datasetPanel={datasetPanel}
             progressText={progressText}
             clarificationBusy={clarificationBusy}
-            onClarification={(answer) => void answerClarification(answer)}
+            onClarification={(answer, saveAsDatasetDefinition) =>
+              void answerClarification(answer, saveAsDatasetDefinition)
+            }
           />
         </div>
         <PromptComposer

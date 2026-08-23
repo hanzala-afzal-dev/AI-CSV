@@ -36,7 +36,8 @@ export class ConversationRunService {
         correlationId: input.correlationId,
         selectedModel: work.selectedModel,
         selectedReasoningEffort: work.selectedReasoningEffort,
-        content: work.content
+        content: work.content,
+        conversationHistory: work.conversationHistory
       });
       if (response.state === "waiting_for_user") {
         await this.repository.pauseRun({

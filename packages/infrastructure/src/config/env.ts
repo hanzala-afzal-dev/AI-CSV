@@ -102,6 +102,25 @@ export const envSchema = z
     QDRANT_API_KEY: z.preprocess(emptyStringAsUndefined, z.string().optional()),
     QDRANT_COLLECTION: z.string().min(1),
     QDRANT_VECTOR_SIZE: integerFromString(z.number().positive()),
+    MEMORY_RETRIEVAL_TOP_K: integerFromString(z.number().min(1).max(20)).default(8),
+    MEMORY_RETRIEVAL_SCORE_THRESHOLD: numberFromString(z.number().min(0).max(1)).default(
+      0.35
+    ),
+    MEMORY_MAX_CONTEXT_CHARACTERS: integerFromString(
+      z.number().min(1_000).max(32_000)
+    ).default(8_000),
+    MEMORY_CACHE_TTL_SECONDS: integerFromString(z.number().min(10).max(3_600)).default(
+      120
+    ),
+    MEMORY_EMBEDDING_BATCH_SIZE: integerFromString(z.number().min(1).max(100)).default(
+      32
+    ),
+    MEMORY_EMBEDDING_MAX_CHARACTERS: integerFromString(
+      z.number().min(1_000).max(100_000)
+    ).default(8_000),
+    MEMORY_EMBEDDING_TIMEOUT_MS: integerFromString(
+      z.number().min(1_000).max(120_000)
+    ).default(30_000),
 
     S3_LOCAL_PORT: integerFromString(z.number().min(1).max(65535)),
     MINIO_CONSOLE_PORT: integerFromString(z.number().min(1).max(65535)),

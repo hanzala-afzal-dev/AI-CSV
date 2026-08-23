@@ -18,9 +18,12 @@ const modelListSchema = z.object({
     .max(10_000)
 });
 
+const maxValidationAttempts = 2;
+
 export interface OpenAiProviderGatewayConfig {
   readonly baseUrl: string;
   readonly timeoutMs: number;
+  readonly retryDelayMs?: number;
   readonly fetch?: typeof fetch;
 }
 
@@ -44,6 +47,26 @@ export class OpenAiProviderGateway implements AiProviderGateway {
   }
 
   private async requestCompatibleModels(
+    secret: SecretValue
+  ): Promise<readonly ProviderModel[]> {
+    for (let attempt = 1; attempt <= maxValidationAttempts; attempt += 1) {
+      try {
+        return await this.requestCompatibleModelsOnce(secret);
+      } catch (error) {
+        const providerError = asProviderError(error);
+        if (
+          providerError.code !== "PROVIDER_UNAVAILABLE" ||
+          attempt === maxValidationAttempts
+        ) {
+          throw providerError;
+        }
+        await delay(this.config.retryDelayMs ?? 200);
+      }
+    }
+    throw providerUnavailable();
+  }
+
+  private async requestCompatibleModelsOnce(
     secret: SecretValue
   ): Promise<readonly ProviderModel[]> {
     const controller = new AbortController();
@@ -76,9 +99,6 @@ export class OpenAiProviderGateway implements AiProviderGateway {
       const parsed = modelListSchema.safeParse(payload);
       if (!parsed.success) throw providerUnavailable();
       return compatibleModels(parsed.data.data.map((model) => model.id));
-    } catch (error) {
-      if (error instanceof ProviderError) throw error;
-      throw providerUnavailable();
     } finally {
       clearTimeout(timeout);
     }
@@ -174,6 +194,16 @@ function providerUnavailable(): ProviderError {
     "PROVIDER_UNAVAILABLE",
     "OpenAI credential validation is temporarily unavailable."
   );
+}
+
+function asProviderError(error: unknown): ProviderError {
+  return error instanceof ProviderError ? error : providerUnavailable();
+}
+
+function delay(milliseconds: number): Promise<void> {
+  return milliseconds > 0
+    ? new Promise((resolve) => setTimeout(resolve, milliseconds))
+    : Promise.resolve();
 }
 
 function withTrailingSlash(value: string): string {
