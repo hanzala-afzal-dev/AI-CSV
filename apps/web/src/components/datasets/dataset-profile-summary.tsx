@@ -2,11 +2,9 @@ import { BarChart3, Columns3, Rows3 } from "lucide-react";
 import type { DatasetProfileContract } from "@agentic-csv/contracts";
 
 export function DatasetProfileSummary({
-  profile,
-  onSuggestion
+  profile
 }: {
   readonly profile: DatasetProfileContract;
-  readonly onSuggestion: (suggestion: string) => void;
 }) {
   return (
     <div className="dataset-profile-summary">
@@ -50,14 +48,6 @@ export function DatasetProfileSummary({
           ))}
         </ul>
       ) : null}
-
-      <div className="conversation-suggestions" aria-label="Dataset suggestions">
-        {profile.suggestedPrompts.map((suggestion) => (
-          <button key={suggestion} type="button" onClick={() => onSuggestion(suggestion)}>
-            {suggestion}
-          </button>
-        ))}
-      </div>
     </div>
   );
 }

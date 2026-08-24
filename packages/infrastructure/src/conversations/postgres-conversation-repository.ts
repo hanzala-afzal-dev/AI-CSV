@@ -731,6 +731,10 @@ export class PostgresConversationRepository implements ConversationRepository {
       if (!checkpoint) throw clarificationNotPending();
       const state = agentAnalysisStateSchema.parse(checkpoint.state);
       if (state.clarification?.id !== clarification.id) throw clarificationNotPending();
+      const displayAnswer = clarificationDisplayAnswer(
+        clarification.options,
+        input.answer
+      );
       const sequence = conversation.lastMessageSequence + 1;
       await transaction.insert(conversationMessages).values({
         id: input.answerMessageId,
@@ -739,7 +743,7 @@ export class PostgresConversationRepository implements ConversationRepository {
         sequence,
         role: "user",
         status: "final",
-        contentParts: textContent(input.answer),
+        contentParts: textContent(displayAnswer),
         createdAt: input.occurredAt,
         finalizedAt: input.occurredAt
       });
@@ -1347,6 +1351,13 @@ function isRunEventType(value: string): value is RunEventType {
 
 function parseClarificationOptions(value: unknown) {
   return agentClarificationOptionSchema.array().max(8).parse(value);
+}
+
+function clarificationDisplayAnswer(options: unknown, answer: string): string {
+  return (
+    parseClarificationOptions(options).find((option) => option.value === answer)?.label ??
+    answer
+  );
 }
 
 function clarificationNotPending(): ConversationError {

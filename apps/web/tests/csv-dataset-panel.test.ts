@@ -43,8 +43,7 @@ describe("CsvDatasetPanel", () => {
         busy: false,
         error: "Storage rejected the CSV upload.",
         onChoose: () => undefined,
-        onFile: () => undefined,
-        onSuggestion: () => undefined
+        onFile: () => undefined
       })
     );
 

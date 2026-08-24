@@ -32,10 +32,13 @@ export function MessageTimeline({
 }) {
   const endRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    endRef.current?.scrollIntoView({ block: "end", behavior: "smooth" });
+    endRef.current?.scrollIntoView({
+      block: "end",
+      behavior: run ? "auto" : "smooth"
+    });
   }, [detail?.messages.length, run?.status, streamedText, progressText]);
 
-  if (loading) return <TimelineSkeleton />;
+  if (loading && !detail) return <TimelineSkeleton />;
   if (!detail || detail.messages.length === 0) {
     return (
       <section className="conversation-empty" aria-labelledby="conversation-empty-title">

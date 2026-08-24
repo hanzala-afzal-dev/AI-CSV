@@ -6,7 +6,8 @@ export const datasetStatusSchema = z.enum([
   "profiling",
   "ready",
   "failed",
-  "deleting"
+  "deleting",
+  "deleted"
 ]);
 
 export const datasetVersionStatusSchema = z.enum([

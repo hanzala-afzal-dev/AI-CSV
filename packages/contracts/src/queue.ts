@@ -5,6 +5,7 @@ export const queueJobNameSchema = z.enum([
   "agent.run.v1",
   "knowledge.index.v1",
   "knowledge.delete.v1",
+  "privacy.delete.v1",
   "outbox.publish.v1"
 ]);
 
@@ -97,9 +98,15 @@ export const outboxPublishJobPayloadSchema = queuePayloadBaseSchema.extend({
   batchSize: z.number().int().positive().max(100)
 });
 
+export const privacyDeleteJobPayloadSchema = queuePayloadBaseSchema.extend({
+  jobName: z.literal("privacy.delete.v1"),
+  deletionId: z.string().uuid()
+});
+
 export type QueueJobName = z.infer<typeof queueJobNameSchema>;
 export type DatasetIngestionJobPayload = z.infer<typeof datasetIngestionJobPayloadSchema>;
 export type AgentRunJobPayload = z.infer<typeof agentRunJobPayloadSchema>;
 export type KnowledgeIndexJobPayload = z.infer<typeof knowledgeIndexJobPayloadSchema>;
 export type KnowledgeDeleteJobPayload = z.infer<typeof knowledgeDeleteJobPayloadSchema>;
 export type OutboxPublishJobPayload = z.infer<typeof outboxPublishJobPayloadSchema>;
+export type PrivacyDeleteJobPayload = z.infer<typeof privacyDeleteJobPayloadSchema>;

@@ -80,11 +80,34 @@ export type {
   UploadIntentResponse
 } from "./dataset";
 export {
+  promptSuggestionResponseSchema,
+  promptSuggestionSchema,
+  suggestionKindSchema,
+  suggestionSourceSchema
+} from "./suggestion";
+export type {
+  PromptSuggestionContract,
+  PromptSuggestionResponseContract,
+  SuggestionKindContract,
+  SuggestionSourceContract
+} from "./suggestion";
+export {
+  accountDeletionRequestSchema,
+  privacyDeletionReceiptSchema,
+  privacyDeletionRequestSchema,
+  privacyDeletionScopeSchema,
+  privacyDeletionStatusSchema,
+  type PrivacyDeletionReceipt,
+  type PrivacyDeletionScope,
+  type PrivacyDeletionStatus
+} from "./privacy";
+export {
   agentRunJobPayloadSchema,
   datasetIngestionJobPayloadSchema,
   knowledgeDeleteJobPayloadSchema,
   knowledgeIndexJobPayloadSchema,
   outboxPublishJobPayloadSchema,
+  privacyDeleteJobPayloadSchema,
   queueJobNameSchema,
   queuePayloadBaseSchema
 } from "./queue";
@@ -94,6 +117,7 @@ export type {
   KnowledgeDeleteJobPayload,
   KnowledgeIndexJobPayload,
   OutboxPublishJobPayload,
+  PrivacyDeleteJobPayload,
   QueueJobName
 } from "./queue";
 export {

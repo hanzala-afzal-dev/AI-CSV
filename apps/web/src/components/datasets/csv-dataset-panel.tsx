@@ -6,6 +6,7 @@ import {
   FileSpreadsheet,
   LoaderCircle,
   RefreshCw,
+  Trash2,
   Upload
 } from "lucide-react";
 import type {
@@ -27,7 +28,7 @@ export function CsvDatasetPanel({
   compact = false,
   onChoose,
   onFile,
-  onSuggestion
+  onDelete
 }: {
   readonly dataset: DatasetDetailContract | null;
   readonly profile: DatasetProfileContract | null;
@@ -38,7 +39,7 @@ export function CsvDatasetPanel({
   readonly compact?: boolean;
   readonly onChoose: () => void;
   readonly onFile: (file: File) => void;
-  readonly onSuggestion: (suggestion: string) => void;
+  readonly onDelete?: () => void;
 }) {
   const version = dataset?.activeVersion ?? null;
   const status = version?.status ?? null;
@@ -106,6 +107,20 @@ export function CsvDatasetPanel({
             Select CSV
           </Button>
         ) : null}
+        {dataset && status !== "deleting" && status !== "deleted" && onDelete ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="size-9 hover:text-danger"
+            aria-label="Delete dataset"
+            title="Delete dataset"
+            disabled={busy}
+            onClick={onDelete}
+          >
+            <Trash2 size={16} />
+          </Button>
+        ) : null}
       </header>
 
       {!dataset ? (
@@ -141,9 +156,7 @@ export function CsvDatasetPanel({
         </p>
       ) : null}
 
-      {ready && profile ? (
-        <DatasetProfileSummary profile={profile} onSuggestion={onSuggestion} />
-      ) : null}
+      {ready && profile ? <DatasetProfileSummary profile={profile} /> : null}
 
       {error ? <p className="dataset-local-error">{error}</p> : null}
     </section>

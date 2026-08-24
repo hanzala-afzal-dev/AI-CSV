@@ -539,6 +539,67 @@ describe("LangGraphConversationResponder", () => {
     );
   });
 
+  it("replaces provider column IDs in clarification copy with trusted names", async () => {
+    const decision: AgentPlanningDecisionContract = {
+      intent: "trend",
+      plan: null,
+      requiresClarification: true,
+      clarificationQuestion: `Should I build a line chart over ${dateOfBirthId}?`,
+      clarificationOptions: [
+        {
+          value: `line_by_${dateOfBirthId}`,
+          label: `Line chart over ${dateOfBirthId}`,
+          columnId: dateOfBirthId
+        }
+      ],
+      assumptions: []
+    };
+    const responder = responderWith({
+      checkpoints: new MemoryCheckpointRepository(),
+      model: modelSession(decision),
+      analysis: analysisService(
+        analysisPlanSchema.parse({
+          version: 1,
+          operation: "trend",
+          dimensions: [{ columnId: dateOfBirthId }],
+          measures: [{ columnId: null, aggregation: "count" }],
+          filters: [],
+          timeGrain: "year",
+          sort: [],
+          limit: 100,
+          visualizationPreference: "line",
+          assumptions: []
+        }),
+        [dateOfBirthColumn]
+      )
+    });
+
+    const waiting = await responder.respond({
+      ...runInput(),
+      content: "Generate a line chart"
+    });
+
+    expect(waiting).toMatchObject({
+      state: "waiting_for_user",
+      clarification: {
+        question: "Should I build a line chart over Date of birth?",
+        options: [
+          {
+            value: `line_by_${dateOfBirthId}`,
+            label: "Line chart over Date of birth",
+            columnId: dateOfBirthId
+          }
+        ]
+      }
+    });
+    if (waiting.state !== "waiting_for_user") {
+      throw new Error("Expected a clarification response.");
+    }
+    expect(waiting.clarification.question).not.toContain(dateOfBirthId);
+    expect(waiting.clarification.options[0]?.label).not.toContain(dateOfBirthId);
+    expect(waiting.clarification.options[0]?.value).toBe(`line_by_${dateOfBirthId}`);
+  });
+
   it("stops after the configured structured-plan repair limit", async () => {
     const invalidPlan = analysisPlanSchema.parse({
       version: 1,

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { Bot, KeyRound, UserRound } from "lucide-react";
+import { Bot, DatabaseZap, KeyRound, UserRound } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { requireCurrentSession } from "@/server/current-session";
 
@@ -33,6 +33,10 @@ export default async function SettingsLayout({
             <Link href="/settings/ai-provider">
               <Bot size={17} />
               AI Provider
+            </Link>
+            <Link href="/settings/data-privacy">
+              <DatabaseZap size={17} />
+              Data &amp; Privacy
             </Link>
           </nav>
           <div className="min-w-0">{children}</div>

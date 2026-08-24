@@ -2,6 +2,7 @@ import type {
   DatasetColumnProfileContract,
   DatasetFailureCodeContract,
   DatasetProfileContract,
+  DatasetStatusContract,
   DatasetVersionStatusContract
 } from "@agentic-csv/contracts";
 
@@ -24,8 +25,7 @@ export interface DatasetView {
   readonly id: string;
   readonly name: string;
   readonly originalFilename: string;
-  readonly status:
-    "pending_upload" | "uploaded" | "profiling" | "ready" | "failed" | "deleting";
+  readonly status: DatasetStatusContract;
   readonly rowCount: number | null;
   readonly columnCount: number | null;
   readonly activeVersion: DatasetVersionView | null;

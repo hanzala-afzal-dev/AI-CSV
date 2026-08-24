@@ -4,6 +4,7 @@ import {
   conversationDetailSchema,
   conversationListSchema,
   conversationSummarySchema,
+  promptSuggestionResponseSchema,
   providerSettingsSchema,
   submitConversationMessageResponseSchema,
   type AgentRunSummaryContract,
@@ -11,6 +12,7 @@ import {
   type ConversationDetailContract,
   type ConversationListContract,
   type ConversationSummaryContract,
+  type PromptSuggestionResponseContract,
   type ProviderSettingsContract,
   type SubmitConversationMessageResponse
 } from "@agentic-csv/contracts";
@@ -39,6 +41,15 @@ export async function getConversation(
     `/api/v1/conversations/${conversationId}`
   );
   return conversationDetailSchema.parse(response.data);
+}
+
+export async function getPromptSuggestions(
+  conversationId: string
+): Promise<PromptSuggestionResponseContract> {
+  const response = await authenticatedQuery<Envelope<unknown>>(
+    `/api/v1/conversations/${conversationId}/suggestions`
+  );
+  return promptSuggestionResponseSchema.parse(response.data);
 }
 
 export async function getAnalysisResult(

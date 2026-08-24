@@ -99,6 +99,27 @@
       "when": 1786233977752,
       "tag": "0013_phase8_semantic_backfill",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1787496604752,
+      "tag": "0014_phase9_privacy_deletion",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1787502990505,
+      "tag": "0015_phase9_clarification_display",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1787503605386,
+      "tag": "0016_phase9_clarification_label_sanitization",
+      "breakpoints": true
     }
   ]
 }

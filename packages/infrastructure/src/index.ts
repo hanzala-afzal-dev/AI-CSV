@@ -63,8 +63,11 @@ export {
 } from "./conversations";
 export { PostgresDatasetRepository } from "./datasets";
 export { PostgresAnalysisRepository } from "./analytics/postgres-analysis-repository";
+export { PostgresSuggestionRepository } from "./suggestions/postgres-suggestion-repository";
 export { PostgresAgentCheckpointRepository } from "./agents/postgres-agent-checkpoint-repository";
 export { PostgresMemoryRepository } from "./memory/postgres-memory-repository";
 export { OpenAiEmbeddingProvider } from "./memory/openai-embedding-provider";
 export type { OpenAiEmbeddingProviderConfig } from "./memory/openai-embedding-provider";
 export { RedisMemoryRetrievalCache } from "./memory/redis-memory-cache";
+export { PostgresPrivacyDeletionRepository } from "./privacy/postgres-privacy-deletion-repository";
+export { RedisPrivacyEphemeralPurger } from "./privacy/redis-privacy-ephemeral-purger";

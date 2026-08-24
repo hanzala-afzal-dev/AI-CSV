@@ -709,12 +709,32 @@ function providerAmbiguity(
   if (decision.requiresClarification) {
     return agentClarificationSchema.parse({
       id: existing?.id ?? createId(),
-      question: decision.clarificationQuestion,
-      options: decision.clarificationOptions.filter(
-        (option) =>
-          option.columnId === null ||
-          snapshot.columns.some((column) => column.id === option.columnId)
+      question: clarificationDisplayText(
+        decision.clarificationQuestion ?? "",
+        snapshot.columns,
+        500,
+        "Which available dataset field should be used?"
       ),
+      options: decision.clarificationOptions
+        .filter(
+          (option) =>
+            option.columnId === null ||
+            snapshot.columns.some((column) => column.id === option.columnId)
+        )
+        .map((option) => {
+          const column = snapshot.columns.find(
+            (candidate) => candidate.id === option.columnId
+          );
+          return {
+            ...option,
+            label: clarificationDisplayText(
+              option.label,
+              snapshot.columns,
+              160,
+              column ? humanize(column.originalName) : "Selected option"
+            )
+          };
+        }),
       status: "pending",
       answer: null
     });
@@ -884,4 +904,31 @@ function normalize(value: string): string {
 
 function humanize(value: string): string {
   return value.replaceAll("_", " ").replaceAll("-", " ");
+}
+
+function clarificationDisplayText(
+  value: string,
+  columns: AgentAnalysisStateContract["columns"],
+  maxLength: number,
+  fallback: string
+): string {
+  let display = value.normalize("NFKC");
+  for (const column of columns) {
+    display = display.replaceAll(column.id, humanize(column.originalName));
+  }
+  display = humanize(
+    display.replace(
+      /\b[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\b/gi,
+      "selected field"
+    )
+  )
+    .split("")
+    .map((character) => {
+      const codePoint = character.codePointAt(0) ?? 0;
+      return codePoint <= 0x1f || codePoint === 0x7f ? " " : character;
+    })
+    .join("")
+    .replace(/\s+/g, " ")
+    .trim();
+  return (display || fallback).slice(0, maxLength);
 }

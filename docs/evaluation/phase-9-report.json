@@ -1,0 +1,658 @@
+{
+  "version": 1,
+  "corpusVersion": 1,
+  "evaluatorVersion": 1,
+  "status": "passed",
+  "total": 50,
+  "passed": 50,
+  "failed": 0,
+  "providerRequests": 0,
+  "categories": [
+    { "category": "average", "total": 2, "passed": 2, "failed": 0 },
+    { "category": "clarification", "total": 1, "passed": 1, "failed": 0 },
+    { "category": "correlation", "total": 2, "passed": 2, "failed": 0 },
+    { "category": "count", "total": 3, "passed": 3, "failed": 0 },
+    { "category": "distribution", "total": 3, "passed": 3, "failed": 0 },
+    { "category": "empty-result", "total": 1, "passed": 1, "failed": 0 },
+    { "category": "filter", "total": 4, "passed": 4, "failed": 0 },
+    { "category": "grouped-comparison", "total": 5, "passed": 5, "failed": 0 },
+    { "category": "invalid-request", "total": 1, "passed": 1, "failed": 0 },
+    { "category": "lookup", "total": 2, "passed": 2, "failed": 0 },
+    { "category": "maximum", "total": 1, "passed": 1, "failed": 0 },
+    { "category": "memory-non-reuse", "total": 1, "passed": 1, "failed": 0 },
+    { "category": "memory-reuse", "total": 1, "passed": 1, "failed": 0 },
+    { "category": "minimum", "total": 1, "passed": 1, "failed": 0 },
+    { "category": "missing-column", "total": 2, "passed": 2, "failed": 0 },
+    { "category": "missing-data", "total": 3, "passed": 3, "failed": 0 },
+    { "category": "numeric-result", "total": 2, "passed": 2, "failed": 0 },
+    { "category": "overview", "total": 1, "passed": 1, "failed": 0 },
+    { "category": "prompt-injection", "total": 2, "passed": 2, "failed": 0 },
+    { "category": "retrieval-isolation", "total": 3, "passed": 3, "failed": 0 },
+    { "category": "sum", "total": 2, "passed": 2, "failed": 0 },
+    { "category": "summary", "total": 1, "passed": 1, "failed": 0 },
+    { "category": "top-bottom", "total": 2, "passed": 2, "failed": 0 },
+    { "category": "trend", "total": 4, "passed": 4, "failed": 0 }
+  ],
+  "cases": [
+    {
+      "id": "plan-001",
+      "category": "overview",
+      "evaluator": "planner",
+      "status": "passed",
+      "checks": [
+        "state",
+        "operation",
+        "stored-column-selection",
+        "aggregation-shape",
+        "chart-preference"
+      ]
+    },
+    {
+      "id": "plan-002",
+      "category": "sum",
+      "evaluator": "planner",
+      "status": "passed",
+      "checks": [
+        "state",
+        "operation",
+        "stored-column-selection",
+        "aggregation-shape",
+        "chart-preference"
+      ]
+    },
+    {
+      "id": "plan-003",
+      "category": "sum",
+      "evaluator": "planner",
+      "status": "passed",
+      "checks": [
+        "state",
+        "operation",
+        "stored-column-selection",
+        "aggregation-shape",
+        "chart-preference"
+      ]
+    },
+    {
+      "id": "plan-004",
+      "category": "average",
+      "evaluator": "planner",
+      "status": "passed",
+      "checks": [
+        "state",
+        "operation",
+        "stored-column-selection",
+        "aggregation-shape",
+        "chart-preference"
+      ]
+    },
+    {
+      "id": "plan-005",
+      "category": "average",
+      "evaluator": "planner",
+      "status": "passed",
+      "checks": [
+        "state",
+        "operation",
+        "stored-column-selection",
+        "aggregation-shape",
+        "chart-preference"
+      ]
+    },
+    {
+      "id": "plan-006",
+      "category": "minimum",
+      "evaluator": "planner",
+      "status": "passed",
+      "checks": [
+        "state",
+        "operation",
+        "stored-column-selection",
+        "aggregation-shape",
+        "chart-preference"
+      ]
+    },
+    {
+      "id": "plan-007",
+      "category": "maximum",
+      "evaluator": "planner",
+      "status": "passed",
+      "checks": [
+        "state",
+        "operation",
+        "stored-column-selection",
+        "aggregation-shape",
+        "chart-preference"
+      ]
+    },
+    {
+      "id": "plan-008",
+      "category": "count",
+      "evaluator": "planner",
+      "status": "passed",
+      "checks": [
+        "state",
+        "operation",
+        "stored-column-selection",
+        "aggregation-shape",
+        "chart-preference"
+      ]
+    },
+    {
+      "id": "plan-009",
+      "category": "grouped-comparison",
+      "evaluator": "planner",
+      "status": "passed",
+      "checks": [
+        "state",
+        "operation",
+        "stored-column-selection",
+        "aggregation-shape",
+        "chart-preference"
+      ]
+    },
+    {
+      "id": "plan-010",
+      "category": "grouped-comparison",
+      "evaluator": "planner",
+      "status": "passed",
+      "checks": [
+        "state",
+        "operation",
+        "stored-column-selection",
+        "aggregation-shape",
+        "chart-preference"
+      ]
+    },
+    {
+      "id": "plan-011",
+      "category": "grouped-comparison",
+      "evaluator": "planner",
+      "status": "passed",
+      "checks": [
+        "state",
+        "operation",
+        "stored-column-selection",
+        "aggregation-shape",
+        "chart-preference"
+      ]
+    },
+    {
+      "id": "plan-012",
+      "category": "distribution",
+      "evaluator": "planner",
+      "status": "passed",
+      "checks": [
+        "state",
+        "operation",
+        "stored-column-selection",
+        "aggregation-shape",
+        "chart-preference"
+      ]
+    },
+    {
+      "id": "plan-013",
+      "category": "distribution",
+      "evaluator": "planner",
+      "status": "passed",
+      "checks": [
+        "state",
+        "operation",
+        "stored-column-selection",
+        "aggregation-shape",
+        "chart-preference"
+      ]
+    },
+    {
+      "id": "plan-014",
+      "category": "trend",
+      "evaluator": "planner",
+      "status": "passed",
+      "checks": [
+        "state",
+        "operation",
+        "stored-column-selection",
+        "aggregation-shape",
+        "chart-preference"
+      ]
+    },
+    {
+      "id": "plan-015",
+      "category": "trend",
+      "evaluator": "planner",
+      "status": "passed",
+      "checks": [
+        "state",
+        "operation",
+        "stored-column-selection",
+        "aggregation-shape",
+        "chart-preference"
+      ]
+    },
+    {
+      "id": "plan-016",
+      "category": "trend",
+      "evaluator": "planner",
+      "status": "passed",
+      "checks": [
+        "state",
+        "operation",
+        "stored-column-selection",
+        "aggregation-shape",
+        "chart-preference"
+      ]
+    },
+    {
+      "id": "plan-017",
+      "category": "correlation",
+      "evaluator": "planner",
+      "status": "passed",
+      "checks": [
+        "state",
+        "operation",
+        "stored-column-selection",
+        "aggregation-shape",
+        "chart-preference"
+      ]
+    },
+    {
+      "id": "plan-018",
+      "category": "clarification",
+      "evaluator": "planner",
+      "status": "passed",
+      "checks": ["state", "clarification"]
+    },
+    {
+      "id": "plan-019",
+      "category": "missing-data",
+      "evaluator": "planner",
+      "status": "passed",
+      "checks": [
+        "state",
+        "operation",
+        "stored-column-selection",
+        "aggregation-shape",
+        "chart-preference"
+      ]
+    },
+    {
+      "id": "plan-020",
+      "category": "missing-data",
+      "evaluator": "planner",
+      "status": "passed",
+      "checks": [
+        "state",
+        "operation",
+        "stored-column-selection",
+        "aggregation-shape",
+        "chart-preference"
+      ]
+    },
+    {
+      "id": "plan-021",
+      "category": "lookup",
+      "evaluator": "planner",
+      "status": "passed",
+      "checks": [
+        "state",
+        "operation",
+        "stored-column-selection",
+        "aggregation-shape",
+        "chart-preference"
+      ]
+    },
+    {
+      "id": "plan-022",
+      "category": "lookup",
+      "evaluator": "planner",
+      "status": "passed",
+      "checks": [
+        "state",
+        "operation",
+        "stored-column-selection",
+        "aggregation-shape",
+        "chart-preference"
+      ]
+    },
+    {
+      "id": "plan-023",
+      "category": "invalid-request",
+      "evaluator": "planner",
+      "status": "passed",
+      "checks": ["state", "clarification"]
+    },
+    {
+      "id": "plan-024",
+      "category": "missing-column",
+      "evaluator": "planner",
+      "status": "passed",
+      "checks": ["state", "clarification"]
+    },
+    {
+      "id": "plan-025",
+      "category": "missing-column",
+      "evaluator": "planner",
+      "status": "passed",
+      "checks": ["state", "clarification"]
+    },
+    {
+      "id": "plan-026",
+      "category": "prompt-injection",
+      "evaluator": "planner",
+      "status": "passed",
+      "checks": ["state", "clarification"]
+    },
+    {
+      "id": "plan-027",
+      "category": "summary",
+      "evaluator": "planner",
+      "status": "passed",
+      "checks": [
+        "state",
+        "operation",
+        "stored-column-selection",
+        "aggregation-shape",
+        "chart-preference"
+      ]
+    },
+    {
+      "id": "exec-001",
+      "category": "numeric-result",
+      "evaluator": "execution",
+      "status": "passed",
+      "checks": [
+        "exact-or-approximate-numeric-result",
+        "result-checksum",
+        "selected-columns",
+        "aggregation-and-filters",
+        "chart-field-compatibility"
+      ]
+    },
+    {
+      "id": "exec-002",
+      "category": "numeric-result",
+      "evaluator": "execution",
+      "status": "passed",
+      "checks": [
+        "exact-or-approximate-numeric-result",
+        "result-checksum",
+        "selected-columns",
+        "aggregation-and-filters",
+        "chart-field-compatibility"
+      ]
+    },
+    {
+      "id": "exec-003",
+      "category": "count",
+      "evaluator": "execution",
+      "status": "passed",
+      "checks": [
+        "exact-or-approximate-numeric-result",
+        "result-checksum",
+        "selected-columns",
+        "aggregation-and-filters",
+        "chart-field-compatibility"
+      ]
+    },
+    {
+      "id": "exec-004",
+      "category": "grouped-comparison",
+      "evaluator": "execution",
+      "status": "passed",
+      "checks": [
+        "exact-or-approximate-numeric-result",
+        "result-checksum",
+        "selected-columns",
+        "aggregation-and-filters",
+        "chart-field-compatibility"
+      ]
+    },
+    {
+      "id": "exec-005",
+      "category": "grouped-comparison",
+      "evaluator": "execution",
+      "status": "passed",
+      "checks": [
+        "exact-or-approximate-numeric-result",
+        "result-checksum",
+        "selected-columns",
+        "aggregation-and-filters",
+        "chart-field-compatibility"
+      ]
+    },
+    {
+      "id": "exec-006",
+      "category": "top-bottom",
+      "evaluator": "execution",
+      "status": "passed",
+      "checks": [
+        "exact-or-approximate-numeric-result",
+        "result-checksum",
+        "selected-columns",
+        "aggregation-and-filters",
+        "chart-field-compatibility"
+      ]
+    },
+    {
+      "id": "exec-007",
+      "category": "top-bottom",
+      "evaluator": "execution",
+      "status": "passed",
+      "checks": [
+        "exact-or-approximate-numeric-result",
+        "result-checksum",
+        "selected-columns",
+        "aggregation-and-filters",
+        "chart-field-compatibility"
+      ]
+    },
+    {
+      "id": "exec-008",
+      "category": "trend",
+      "evaluator": "execution",
+      "status": "passed",
+      "checks": [
+        "exact-or-approximate-numeric-result",
+        "result-checksum",
+        "selected-columns",
+        "aggregation-and-filters",
+        "chart-field-compatibility"
+      ]
+    },
+    {
+      "id": "exec-009",
+      "category": "filter",
+      "evaluator": "execution",
+      "status": "passed",
+      "checks": [
+        "exact-or-approximate-numeric-result",
+        "result-checksum",
+        "selected-columns",
+        "aggregation-and-filters",
+        "chart-field-compatibility"
+      ]
+    },
+    {
+      "id": "exec-010",
+      "category": "filter",
+      "evaluator": "execution",
+      "status": "passed",
+      "checks": [
+        "exact-or-approximate-numeric-result",
+        "result-checksum",
+        "selected-columns",
+        "aggregation-and-filters",
+        "chart-field-compatibility"
+      ]
+    },
+    {
+      "id": "exec-011",
+      "category": "filter",
+      "evaluator": "execution",
+      "status": "passed",
+      "checks": [
+        "exact-or-approximate-numeric-result",
+        "result-checksum",
+        "selected-columns",
+        "aggregation-and-filters",
+        "chart-field-compatibility"
+      ]
+    },
+    {
+      "id": "exec-012",
+      "category": "empty-result",
+      "evaluator": "execution",
+      "status": "passed",
+      "checks": [
+        "exact-or-approximate-numeric-result",
+        "result-checksum",
+        "selected-columns",
+        "aggregation-and-filters",
+        "chart-field-compatibility"
+      ]
+    },
+    {
+      "id": "exec-013",
+      "category": "distribution",
+      "evaluator": "execution",
+      "status": "passed",
+      "checks": [
+        "exact-or-approximate-numeric-result",
+        "result-checksum",
+        "selected-columns",
+        "aggregation-and-filters",
+        "chart-field-compatibility"
+      ]
+    },
+    {
+      "id": "exec-014",
+      "category": "missing-data",
+      "evaluator": "execution",
+      "status": "passed",
+      "checks": [
+        "exact-or-approximate-numeric-result",
+        "result-checksum",
+        "selected-columns",
+        "aggregation-and-filters",
+        "chart-field-compatibility"
+      ]
+    },
+    {
+      "id": "exec-015",
+      "category": "correlation",
+      "evaluator": "execution",
+      "status": "passed",
+      "checks": [
+        "exact-or-approximate-numeric-result",
+        "result-checksum",
+        "selected-columns",
+        "aggregation-and-filters",
+        "chart-field-compatibility"
+      ]
+    },
+    {
+      "id": "exec-016",
+      "category": "count",
+      "evaluator": "execution",
+      "status": "passed",
+      "checks": [
+        "exact-or-approximate-numeric-result",
+        "result-checksum",
+        "selected-columns",
+        "aggregation-and-filters",
+        "chart-field-compatibility"
+      ]
+    },
+    {
+      "id": "exec-017",
+      "category": "filter",
+      "evaluator": "execution",
+      "status": "passed",
+      "checks": [
+        "exact-or-approximate-numeric-result",
+        "result-checksum",
+        "selected-columns",
+        "aggregation-and-filters",
+        "chart-field-compatibility"
+      ]
+    },
+    {
+      "id": "memory-001",
+      "category": "memory-reuse",
+      "evaluator": "retrieval",
+      "status": "passed",
+      "checks": [
+        "memory-reuse-policy",
+        "tenant-dataset-version-filter",
+        "authoritative-hydration",
+        "zero-leakage",
+        "untrusted-content-separation"
+      ]
+    },
+    {
+      "id": "memory-002",
+      "category": "memory-non-reuse",
+      "evaluator": "retrieval",
+      "status": "passed",
+      "checks": [
+        "memory-reuse-policy",
+        "tenant-dataset-version-filter",
+        "authoritative-hydration",
+        "zero-leakage",
+        "untrusted-content-separation"
+      ]
+    },
+    {
+      "id": "memory-003",
+      "category": "retrieval-isolation",
+      "evaluator": "retrieval",
+      "status": "passed",
+      "checks": [
+        "memory-reuse-policy",
+        "tenant-dataset-version-filter",
+        "authoritative-hydration",
+        "zero-leakage",
+        "untrusted-content-separation"
+      ]
+    },
+    {
+      "id": "memory-004",
+      "category": "retrieval-isolation",
+      "evaluator": "retrieval",
+      "status": "passed",
+      "checks": [
+        "memory-reuse-policy",
+        "tenant-dataset-version-filter",
+        "authoritative-hydration",
+        "zero-leakage",
+        "untrusted-content-separation"
+      ]
+    },
+    {
+      "id": "memory-005",
+      "category": "retrieval-isolation",
+      "evaluator": "retrieval",
+      "status": "passed",
+      "checks": [
+        "memory-reuse-policy",
+        "tenant-dataset-version-filter",
+        "authoritative-hydration",
+        "zero-leakage",
+        "untrusted-content-separation"
+      ]
+    },
+    {
+      "id": "memory-006",
+      "category": "prompt-injection",
+      "evaluator": "retrieval",
+      "status": "passed",
+      "checks": [
+        "memory-reuse-policy",
+        "tenant-dataset-version-filter",
+        "authoritative-hydration",
+        "zero-leakage",
+        "untrusted-content-separation"
+      ]
+    }
+  ]
+}

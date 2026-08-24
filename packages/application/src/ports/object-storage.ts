@@ -48,6 +48,8 @@ export interface ObjectStorage {
     filename: string;
   }): string;
   createPresignedUpload(request: PresignedUploadRequest): Promise<PresignedUpload>;
+  deleteObject(objectKey: string): Promise<void>;
+  deleteObjects(objectKeys: readonly string[]): Promise<void>;
   inspectObject(objectKey: string): Promise<StoredObjectMetadata>;
   readObject(objectKey: string): Promise<AsyncIterable<Uint8Array>>;
 }

@@ -119,6 +119,8 @@ function createFixture() {
     isReady: vi.fn(async () => true),
     createObjectKey: vi.fn(() => payload.objectKey),
     createPresignedUpload: vi.fn(),
+    deleteObject: vi.fn(async () => undefined),
+    deleteObjects: vi.fn(async () => undefined),
     inspectObject: vi.fn(async () => ({
       sizeBytes: 12,
       contentType: "text/csv",
