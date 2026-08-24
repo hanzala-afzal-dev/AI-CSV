@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const state = vi.hoisted(() => ({
   csrfToken: "csrf-current",
+  trustProxy: true,
   rateLimitKeys: [] as string[]
 }));
 
@@ -31,11 +32,13 @@ vi.mock("../src/server/runtime", () => ({
       SESSION_COOKIE_NAME: "agentic_csv_session",
       SESSION_ABSOLUTE_TTL_SECONDS: 604800,
       NODE_ENV: "test",
-      TRUST_PROXY: true,
+      TRUST_PROXY: state.trustProxy,
       RATE_LIMIT_WINDOW_SECONDS: 60,
       RATE_LIMIT_MAX_REQUESTS: 100,
       RATE_LIMIT_LOGIN_MAX_REQUESTS: 10,
-      RATE_LIMIT_RECOVERY_MAX_REQUESTS: 5
+      RATE_LIMIT_RECOVERY_MAX_REQUESTS: 5,
+      RATE_LIMIT_UPLOAD_INTENT_MAX_REQUESTS: 10,
+      RATE_LIMIT_UPLOAD_COMPLETION_MAX_REQUESTS: 20
     },
     identityService: {
       authenticateSession: vi.fn(async (token: string) =>
@@ -62,12 +65,18 @@ vi.mock("../src/server/runtime", () => ({
   })
 }));
 
-import { authorizeBrowserMutation, protectPublicAuthRequest } from "../src/server/http";
+import {
+  authorizeBrowserMutation,
+  protectDatasetUpload,
+  protectPrivacyDeletion,
+  protectPublicAuthRequest
+} from "../src/server/http";
 import { DELETE as revokeSessionRoute } from "../src/app/api/v1/me/sessions/[sessionId]/route";
 
 describe("browser session and CSRF security", () => {
   beforeEach(() => {
     state.csrfToken = "csrf-current";
+    state.trustProxy = true;
     state.rateLimitKeys.length = 0;
   });
 
@@ -104,6 +113,22 @@ describe("browser session and CSRF security", () => {
     expect(state.rateLimitKeys).toHaveLength(2);
     expect(state.rateLimitKeys.join(" ")).not.toContain("alice@example.com");
     expect(state.rateLimitKeys.join(" ")).not.toContain("203.0.113.9");
+  });
+
+  it("skips shared IP buckets when the client address is unknown", async () => {
+    state.trustProxy = false;
+    const request = requestWith({});
+
+    await protectPublicAuthRequest(request, "login", "Alice@Example.com");
+    await protectDatasetUpload(request, session.userId, "intent");
+    await protectPrivacyDeletion(request, session.userId, "account");
+
+    expect(state.rateLimitKeys.some((key) => key.includes(":ip:"))).toBe(false);
+    expect(
+      state.rateLimitKeys.some((key) => key.startsWith("auth:login:identifier:"))
+    ).toBe(true);
+    expect(state.rateLimitKeys).toContain(`dataset:intent:user:${session.userId}`);
+    expect(state.rateLimitKeys).toContain(`privacy:account:user:${session.userId}`);
   });
 
   it("does not let Alice revoke Bob's session through the API", async () => {
