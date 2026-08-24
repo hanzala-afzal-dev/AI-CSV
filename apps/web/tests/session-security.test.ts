@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const state = vi.hoisted(() => ({
   csrfToken: "csrf-current",
+  trustedProxyHops: 1,
   rateLimitKeys: [] as string[]
 }));
 
@@ -32,6 +33,7 @@ vi.mock("../src/server/runtime", () => ({
       SESSION_ABSOLUTE_TTL_SECONDS: 604800,
       NODE_ENV: "test",
       TRUST_PROXY: true,
+      TRUSTED_PROXY_HOPS: state.trustedProxyHops,
       RATE_LIMIT_WINDOW_SECONDS: 60,
       RATE_LIMIT_MAX_REQUESTS: 100,
       RATE_LIMIT_LOGIN_MAX_REQUESTS: 10,
@@ -68,6 +70,7 @@ import { DELETE as revokeSessionRoute } from "../src/app/api/v1/me/sessions/[ses
 describe("browser session and CSRF security", () => {
   beforeEach(() => {
     state.csrfToken = "csrf-current";
+    state.trustedProxyHops = 1;
     state.rateLimitKeys.length = 0;
   });
 
@@ -104,6 +107,50 @@ describe("browser session and CSRF security", () => {
     expect(state.rateLimitKeys).toHaveLength(2);
     expect(state.rateLimitKeys.join(" ")).not.toContain("alice@example.com");
     expect(state.rateLimitKeys.join(" ")).not.toContain("203.0.113.9");
+  });
+
+  it("ignores spoofed forwarding entries outside the trusted proxy boundary", async () => {
+    await protectPublicAuthRequest(
+      requestWith({}, { "x-forwarded-for": "198.51.100.10, 203.0.113.9" }),
+      "login",
+      "Alice@Example.com"
+    );
+    const firstBucket = state.rateLimitKeys[0];
+
+    state.rateLimitKeys.length = 0;
+    await protectPublicAuthRequest(
+      requestWith({}, { "x-forwarded-for": "198.51.100.11, 203.0.113.9" }),
+      "login",
+      "Alice@Example.com"
+    );
+    expect(state.rateLimitKeys[0]).toBe(firstBucket);
+
+    state.rateLimitKeys.length = 0;
+    await protectPublicAuthRequest(
+      requestWith({}, { "x-forwarded-for": "198.51.100.11, 203.0.113.10" }),
+      "login",
+      "Alice@Example.com"
+    );
+    expect(state.rateLimitKeys[0]).not.toBe(firstBucket);
+  });
+
+  it("selects the client address before the configured trusted proxy chain", async () => {
+    state.trustedProxyHops = 2;
+    await protectPublicAuthRequest(
+      requestWith({}, { "x-forwarded-for": "198.51.100.10, 203.0.113.9, 192.0.2.20" }),
+      "login",
+      "Alice@Example.com"
+    );
+    const twoHopBucket = state.rateLimitKeys[0];
+
+    state.trustedProxyHops = 1;
+    state.rateLimitKeys.length = 0;
+    await protectPublicAuthRequest(
+      requestWith({}, { "x-forwarded-for": "203.0.113.9" }),
+      "login",
+      "Alice@Example.com"
+    );
+    expect(state.rateLimitKeys[0]).toBe(twoHopBucket);
   });
 
   it("does not let Alice revoke Bob's session through the API", async () => {

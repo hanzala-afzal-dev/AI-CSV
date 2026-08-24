@@ -1,4 +1,5 @@
 import { createHash, createHmac } from "node:crypto";
+import { isIP } from "node:net";
 import { NextResponse } from "next/server";
 import { ZodError } from "zod";
 import {
@@ -528,11 +529,17 @@ async function enforceRateLimit(
 function readClientAddress(request: Request): string {
   const env = getRuntime().env;
   if (!env.TRUST_PROXY) return "unknown";
-  return (
-    request.headers.get("x-forwarded-for")?.split(",", 1)[0]?.trim() ||
-    request.headers.get("x-real-ip")?.trim() ||
-    "unknown"
-  );
+  const forwardedHeader = request.headers.get("x-forwarded-for");
+  if (forwardedHeader) {
+    const forwarded = forwardedHeader
+      .split(",")
+      .map((value) => value.trim())
+      .filter(Boolean);
+    const address = forwarded.at(-env.TRUSTED_PROXY_HOPS);
+    return address && isIP(address) !== 0 ? address : "unknown";
+  }
+  const realIp = request.headers.get("x-real-ip")?.trim();
+  return realIp && isIP(realIp) !== 0 ? realIp : "unknown";
 }
 
 function hashPrivateValue(value: string, secret: string): string {

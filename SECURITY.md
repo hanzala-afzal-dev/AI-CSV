@@ -23,6 +23,8 @@
 - Every mutable dataset lookup is constrained by authenticated user ID and forced PostgreSQL RLS.
 - Browser mutations require JSON, trusted Origin/Referer and session-bound CSRF.
 - Redis rate limiting is applied before and after authentication and fails closed.
+- Per-IP limits trust forwarding headers only when `TRUST_PROXY=true`; the ingress must sanitize
+  client-supplied forwarding headers and `TRUSTED_PROXY_HOPS` must match the trusted proxy chain.
 - Upload completion verifies signed S3 metadata, size, content type, and checksum.
 - Drizzle parameterizes application queries; route input is never interpolated into SQL.
 - Browser sessions use opaque HTTP-only SameSite cookies; persisted tokens are hashed.

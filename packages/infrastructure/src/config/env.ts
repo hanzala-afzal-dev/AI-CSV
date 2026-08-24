@@ -71,6 +71,7 @@ export const envSchema = z
     ARGON2_TIME_COST: integerFromString(z.number().min(2)).default(2),
     ARGON2_PARALLELISM: integerFromString(z.number().min(1)).default(1),
     TRUST_PROXY: booleanFromString.default(false),
+    TRUSTED_PROXY_HOPS: integerFromString(z.number().min(1).max(10)).default(1),
     SMTP_HOST: z.string().min(1).default("localhost"),
     SMTP_PORT: integerFromString(z.number().min(1).max(65535)).default(1025),
     MAILPIT_UI_PORT: integerFromString(z.number().min(1).max(65535)).default(8025),
