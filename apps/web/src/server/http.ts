@@ -6,6 +6,7 @@ import {
   ConversationError,
   IdentityError,
   ProviderError,
+  PrivacyDeletionError,
   type AuthenticatedSession
 } from "@agentic-csv/application";
 import { DomainError } from "@agentic-csv/domain";
@@ -185,6 +186,19 @@ export async function protectDatasetUpload(
   const userHeaders = await enforceRateLimit(`dataset:${category}:user:${userId}`, limit);
   const ipBucket = hashPrivateValue(readClientAddress(request), runtime.env.AUTH_SECRET);
   await enforceRateLimit(`dataset:${category}:ip:${ipBucket}`, limit);
+  return userHeaders;
+}
+
+export async function protectPrivacyDeletion(
+  request: Request,
+  userId: string,
+  scope: "dataset" | "account"
+): Promise<Readonly<Record<string, string>>> {
+  const runtime = getRuntime();
+  const limit = Math.min(5, runtime.env.RATE_LIMIT_RECOVERY_MAX_REQUESTS);
+  const userHeaders = await enforceRateLimit(`privacy:${scope}:user:${userId}`, limit);
+  const ipBucket = hashPrivateValue(readClientAddress(request), runtime.env.AUTH_SECRET);
+  await enforceRateLimit(`privacy:${scope}:ip:${ipBucket}`, limit);
   return userHeaders;
 }
 
@@ -545,6 +559,14 @@ function mapError(error: unknown): {
     };
     return {
       status: statusByCode[error.code] ?? 400,
+      code: error.code,
+      message: error.message,
+      headers: {}
+    };
+  }
+  if (error instanceof PrivacyDeletionError) {
+    return {
+      status: 404,
       code: error.code,
       message: error.message,
       headers: {}

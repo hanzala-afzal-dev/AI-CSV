@@ -56,6 +56,10 @@ class FakeObjectStorage implements ObjectStorage {
       yield new Uint8Array();
     })();
   }
+
+  public async deleteObject(): Promise<void> {}
+
+  public async deleteObjects(): Promise<void> {}
 }
 
 class FakeUnitOfWork implements UnitOfWork {

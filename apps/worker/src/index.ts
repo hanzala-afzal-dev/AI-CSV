@@ -8,7 +8,8 @@ import {
   DeterministicAnalysisPlanner,
   MemoryDeletionService,
   MemoryIndexingService,
-  MemoryRetrievalService
+  MemoryRetrievalService,
+  PrivacyDeletionProcessor
 } from "@agentic-csv/application";
 import {
   LangChainOpenAiAgentGateway,
@@ -32,9 +33,11 @@ import {
   PostgresConversationRepository,
   PostgresDatasetRepository,
   PostgresMemoryRepository,
+  PostgresPrivacyDeletionRepository,
   PostgresProviderSettingsRepository,
   QdrantSemanticVectorStore,
   RedisMemoryRetrievalCache,
+  RedisPrivacyEphemeralPurger,
   S3ObjectStorage,
   queueNames
 } from "@agentic-csv/infrastructure";
@@ -46,6 +49,7 @@ import { processAgentRunJob } from "./processors/agent-run.processor";
 import { processDatasetIngestionJob } from "./processors/dataset-ingestion.processor";
 import { processKnowledgeDeleteJob } from "./processors/knowledge-delete.processor";
 import { processKnowledgeIndexJob } from "./processors/knowledge-index.processor";
+import { processPrivacyDeleteJob } from "./processors/privacy-delete.processor";
 
 const env = loadEnv();
 const logger = createLogger(env).child({ serviceProcess: "worker" });
@@ -109,6 +113,17 @@ const memoryIndexing = new MemoryIndexingService(
   { batchSize: env.MEMORY_EMBEDDING_BATCH_SIZE }
 );
 const memoryDeletion = new MemoryDeletionService(semanticVectors);
+const privacyEphemeral = new RedisPrivacyEphemeralPurger(
+  memoryRedis,
+  env.REDIS_KEY_PREFIX,
+  env
+);
+const privacyDeletion = new PrivacyDeletionProcessor(
+  new PostgresPrivacyDeletionRepository(database),
+  objectStorage,
+  semanticVectors,
+  privacyEphemeral
+);
 const datasetIngestionService = new DatasetIngestionService(
   datasetRepository,
   objectStorage,
@@ -206,6 +221,16 @@ const knowledgeDeleteWorker = new Worker(
   {
     connection: createBullMqConnectionOptions(env.REDIS_URL),
     concurrency: env.WORKER_CONCURRENCY,
+    prefix: env.QUEUE_PREFIX
+  }
+);
+
+const privacyDeleteWorker = new Worker(
+  queueNames.privacyDeletion,
+  async (job) => processPrivacyDeleteJob(job, privacyDeletion, logger),
+  {
+    connection: createBullMqConnectionOptions(env.REDIS_URL),
+    concurrency: Math.max(1, Math.min(2, env.WORKER_CONCURRENCY)),
     prefix: env.QUEUE_PREFIX
   }
 );
@@ -385,6 +410,48 @@ knowledgeDeleteWorker.on("error", (error) => {
   );
 });
 
+privacyDeleteWorker.on("active", (job) => {
+  logger.info(
+    { queue: queueNames.privacyDeletion, jobId: job.id, jobName: job.name },
+    "job started"
+  );
+});
+
+privacyDeleteWorker.on("completed", (job) => {
+  logger.info(
+    { queue: queueNames.privacyDeletion, jobId: job.id, jobName: job.name },
+    "job completed"
+  );
+});
+
+privacyDeleteWorker.on("failed", (job, error) => {
+  const attempts = typeof job?.opts.attempts === "number" ? job.opts.attempts : 1;
+  const willRetry = Boolean(job && job.attemptsMade < attempts);
+  const log = willRetry ? logger.warn.bind(logger) : logger.error.bind(logger);
+  log(
+    {
+      queue: queueNames.privacyDeletion,
+      jobId: job?.id,
+      jobName: job?.name,
+      correlationId: readCorrelationId(job?.data),
+      attempt: job?.attemptsMade,
+      willRetry,
+      error: { name: error.name, message: error.message }
+    },
+    "job failed"
+  );
+});
+
+privacyDeleteWorker.on("error", (error) => {
+  logger.error(
+    {
+      queue: queueNames.privacyDeletion,
+      error: { name: error.name, message: error.message }
+    },
+    "worker error"
+  );
+});
+
 async function dispatchOutbox(): Promise<void> {
   if (dispatchRunning) {
     return;
@@ -411,9 +478,11 @@ async function shutdown(signal: NodeJS.Signals): Promise<void> {
     datasetWorker.close(),
     agentRunWorker.close(),
     knowledgeIndexWorker.close(),
-    knowledgeDeleteWorker.close()
+    knowledgeDeleteWorker.close(),
+    privacyDeleteWorker.close()
   ]);
   await outboxDispatcher.close();
+  await privacyEphemeral.close();
   if (memoryRedis.isOpen) await memoryRedis.quit();
   await pool.end();
   logger.info("worker shutdown complete");
@@ -433,7 +502,8 @@ logger.info(
       queueNames.datasetIngestion,
       queueNames.agentRun,
       queueNames.knowledgeIndexing,
-      queueNames.knowledgeDeletion
+      queueNames.knowledgeDeletion,
+      queueNames.privacyDeletion
     ],
     concurrency: env.WORKER_CONCURRENCY
   },

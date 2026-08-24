@@ -4,7 +4,8 @@ import type {
   AgentRunJobPayload,
   DatasetIngestionJobPayload,
   KnowledgeDeleteJobPayload,
-  KnowledgeIndexJobPayload
+  KnowledgeIndexJobPayload,
+  PrivacyDeleteJobPayload
 } from "@agentic-csv/contracts";
 import type { AppEnv } from "../config/env";
 import { createBullMqConnectionOptions } from "../redis/client";
@@ -14,7 +15,8 @@ export const queueNames = {
   agentRun: "agent-run",
   knowledgeIndexing: "knowledge-indexing",
   knowledgeDeletion: "knowledge-deletion",
-  outboxPublishing: "outbox-publishing"
+  outboxPublishing: "outbox-publishing",
+  privacyDeletion: "privacy-deletion"
 } as const;
 
 export type QueueName = (typeof queueNames)[keyof typeof queueNames];
@@ -66,6 +68,13 @@ export function createKnowledgeIndexQueue(env: AppEnv) {
 export function createKnowledgeDeleteQueue(env: AppEnv) {
   return new Queue<KnowledgeDeleteJobPayload>(
     queueNames.knowledgeDeletion,
+    queueOptions(env)
+  );
+}
+
+export function createPrivacyDeleteQueue(env: AppEnv) {
+  return new Queue<PrivacyDeleteJobPayload>(
+    queueNames.privacyDeletion,
     queueOptions(env)
   );
 }

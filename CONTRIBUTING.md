@@ -11,14 +11,11 @@
 
 ```bash
 corepack enable
-pnpm install
-pnpm format:check
-pnpm architecture:check
-pnpm lint
-pnpm typecheck
-pnpm test
-pnpm build
+pnpm install --frozen-lockfile
+pnpm release:check
 ```
+
+See `docs/phase-9-release.md` for the gate contents and optional provider smoke test.
 
 ## Architecture Boundary
 

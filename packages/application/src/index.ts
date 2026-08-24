@@ -125,6 +125,27 @@ export type {
   AnalysisReadRepository,
   ReadyAnalysisContext
 } from "./analysis/ports";
+export { SuggestionError } from "./suggestions/suggestion-error";
+export type { SuggestionErrorCode } from "./suggestions/suggestion-error";
+export { SuggestionService } from "./suggestions/suggestion-service";
+export type {
+  CompletedSuggestionAnalysis,
+  SuggestionColumn,
+  SuggestionContext,
+  SuggestionRepository
+} from "./suggestions/ports";
+export { PrivacyDeletionError } from "./privacy/privacy-error";
+export type { PrivacyDeletionErrorCode } from "./privacy/privacy-error";
+export {
+  PrivacyDeletionProcessor,
+  PrivacyDeletionService
+} from "./privacy/privacy-deletion-service";
+export type {
+  PrivacyDeletionRepository,
+  PrivacyDeletionView,
+  PrivacyDeletionWork,
+  PrivacyEphemeralPurger
+} from "./privacy/ports";
 export { AgentError } from "./agents/agent-error";
 export type { AgentErrorCode } from "./agents/agent-error";
 export { AgentProviderService } from "./agents/agent-provider-service";

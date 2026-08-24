@@ -11,8 +11,8 @@
 - Long-running work is queued, not performed in request handlers.
 - Model-backed endpoints must use stricter rate limits.
 - Object keys are scoped by user, dataset, and version.
-- Future Qdrant retrieval requires user, dataset, and compatible-version filters.
-- Future analytical SQL must be read-only and allow-listed.
+- Qdrant retrieval requires user, dataset, and compatible-version filters.
+- Analytical SQL is read-only, compiler-owned, allow-listed and parameterized.
 - Queue payloads are validated and versioned.
 - Workers must be idempotent and safe to retry.
 - Containers run as non-root users.
@@ -21,14 +21,18 @@
 
 - API keys contain 256 bits of random material and are stored as HMAC-SHA-256 digests.
 - Every mutable dataset lookup is constrained by authenticated user ID and forced PostgreSQL RLS.
-- Browser mutations require JSON and reject cross-site fetch metadata and untrusted origins.
+- Browser mutations require JSON, trusted Origin/Referer and session-bound CSRF.
 - Redis rate limiting is applied before and after authentication and fails closed.
 - Upload completion verifies signed S3 metadata, size, content type, and checksum.
 - Drizzle parameterizes application queries; route input is never interpolated into SQL.
-- Idempotency records and ingestion requests are committed in the dataset transaction.
+- Browser sessions use opaque HTTP-only SameSite cookies; persisted tokens are hashed.
+- OpenAI credentials are validate-before-replace, encrypted with AES-256-GCM and never returned.
+- Dataset/account deletion is reauthenticated, queued, idempotent and retryable across all stores.
+- Production responses include HSTS, CSP, frame, MIME, referrer and capability restrictions.
+- `pnpm security:check` scans secrets and supply-chain policy; `pnpm security:audit` checks advisories.
 
-Bearer keys must not be stored in browser local storage. An interactive browser client needs
-a separately specified OAuth/session flow with secure, HTTP-only cookies.
+The completed Phase 9 review and accepted boundaries are in
+[`docs/reviews/phase-9-security.md`](./docs/reviews/phase-9-security.md).
 
 ## Reporting
 

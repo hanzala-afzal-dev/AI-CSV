@@ -602,7 +602,8 @@ export const datasetStatusEnum = pgEnum("dataset_status", [
   "profiling",
   "ready",
   "failed",
-  "deleting"
+  "deleting",
+  "deleted"
 ]);
 
 export const datasetVersionStatusEnum = pgEnum("dataset_version_status", [
@@ -1266,5 +1267,87 @@ export const outboxEvents = pgTable(
   (table) => [
     index("outbox_events_unpublished_idx").on(table.publishedAt, table.occurredAt),
     index("outbox_events_aggregate_idx").on(table.aggregateId)
+  ]
+);
+
+export const privacyDeletionRequests = pgTable(
+  "privacy_deletion_requests",
+  {
+    id: uuid("id").primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    scope: varchar("scope", { length: 16 }).notNull(),
+    datasetId: uuid("dataset_id").references(() => datasets.id, {
+      onDelete: "cascade"
+    }),
+    clientRequestId: uuid("client_request_id").notNull(),
+    correlationId: varchar("correlation_id", { length: 160 }).notNull(),
+    objectKeys: jsonb("object_keys").notNull(),
+    status: varchar("status", { length: 24 }).notNull().default("scheduled"),
+    attempts: integer("attempts").notNull().default(0),
+    failureCode: varchar("failure_code", { length: 80 }),
+    requestedAt: timestamp("requested_at", { withTimezone: true }).notNull(),
+    claimedAt: timestamp("claimed_at", { withTimezone: true }),
+    failedAt: timestamp("failed_at", { withTimezone: true }),
+    completedAt: timestamp("completed_at", { withTimezone: true })
+  },
+  (table) => [
+    uniqueIndex("privacy_deletion_requests_user_client_unique").on(
+      table.userId,
+      table.clientRequestId
+    ),
+    uniqueIndex("privacy_deletion_requests_active_dataset_unique")
+      .on(table.userId, table.datasetId)
+      .where(
+        sql`${table.scope} = 'dataset' and ${table.status} in ('scheduled', 'processing', 'failed')`
+      ),
+    uniqueIndex("privacy_deletion_requests_active_account_unique")
+      .on(table.userId)
+      .where(
+        sql`${table.scope} = 'account' and ${table.status} in ('scheduled', 'processing', 'failed')`
+      ),
+    index("privacy_deletion_requests_status_idx").on(table.status, table.requestedAt),
+    check(
+      "privacy_deletion_requests_scope_check",
+      sql`(${table.scope} = 'dataset' and ${table.datasetId} is not null)
+        or (${table.scope} = 'account' and ${table.datasetId} is null)`
+    ),
+    check(
+      "privacy_deletion_requests_status_check",
+      sql`${table.status} in ('scheduled', 'processing', 'failed', 'completed')`
+    ),
+    check(
+      "privacy_deletion_requests_objects_check",
+      sql`jsonb_typeof(${table.objectKeys}) = 'array'
+        and jsonb_array_length(${table.objectKeys}) <= 1000`
+    ),
+    check("privacy_deletion_requests_attempts_check", sql`${table.attempts} >= 0`)
+  ]
+);
+
+export const privacyDeletionAudits = pgTable(
+  "privacy_deletion_audits",
+  {
+    id: uuid("id").primaryKey(),
+    subjectHash: varchar("subject_hash", { length: 64 }).notNull(),
+    resourceHash: varchar("resource_hash", { length: 64 }),
+    scope: varchar("scope", { length: 16 }).notNull(),
+    objectCount: integer("object_count").notNull(),
+    requestedAt: timestamp("requested_at", { withTimezone: true }).notNull(),
+    completedAt: timestamp("completed_at", { withTimezone: true }).notNull()
+  },
+  (table) => [
+    index("privacy_deletion_audits_completed_idx").on(table.completedAt),
+    check(
+      "privacy_deletion_audits_hash_check",
+      sql`${table.subjectHash} ~ '^[0-9a-f]{64}$'
+        and (${table.resourceHash} is null or ${table.resourceHash} ~ '^[0-9a-f]{64}$')`
+    ),
+    check(
+      "privacy_deletion_audits_scope_check",
+      sql`${table.scope} in ('dataset', 'account')`
+    ),
+    check("privacy_deletion_audits_object_count_check", sql`${table.objectCount} >= 0`)
   ]
 );

@@ -413,11 +413,12 @@ describeIntegration("conversation repository and RLS", () => {
       occurredAt: now
     });
 
+    const answerMessageId = randomUUID();
     const resumed = await repository.resumeRun({
       userId: aliceId,
       conversationId,
       runId: submission.runId,
-      answerMessageId: randomUUID(),
+      answerMessageId,
       answer: "net_revenue",
       saveAsDatasetDefinition: true,
       memoryId,
@@ -426,6 +427,23 @@ describeIntegration("conversation repository and RLS", () => {
     });
 
     expect(resumed?.status).toBe("queued");
+    const answerMessage = await admin.query(
+      `select content_parts from messages where id = $1`,
+      [answerMessageId]
+    );
+    expect(answerMessage.rows).toEqual([
+      {
+        content_parts: {
+          version: 1,
+          parts: [{ type: "text", text: "Net revenue" }]
+        }
+      }
+    ]);
+    const persistedClarification = await admin.query(
+      `select answer from agent_clarifications where id = $1`,
+      [clarificationId]
+    );
+    expect(persistedClarification.rows).toEqual([{ answer: "net_revenue" }]);
     const persisted = await admin.query(
       `select confidence, definition, source_message_id, source_clarification_id,
               index_status

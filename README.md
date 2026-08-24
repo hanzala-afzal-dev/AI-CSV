@@ -8,10 +8,10 @@ The product follows one central rule:
 
 > The LLM plans and explains. Deterministic tools calculate. RAG retrieves semantic context.
 
-A user will be able to create an account, securely connect their own OpenAI API key, upload a CSV, and
-ask questions in natural language. The application will profile the dataset, execute calculations through
-bounded analytical tools, explain the result, show its assumptions and provenance, and render validated
-charts when appropriate. Conversations, datasets, results, and confirmed context will remain available
+Users can create an account, securely connect their own OpenAI API key, upload a CSV, and ask questions
+in natural language. The application profiles the dataset, executes calculations through bounded
+analytical tools, explains the result, shows its assumptions and provenance, and renders validated charts
+when appropriate. Conversations, datasets, results, and confirmed context remain available
 across sessions while staying isolated from every other user.
 
 The project is being built as a production-minded modular monolith using Next.js, TypeScript, DDD/CQRS,
@@ -20,16 +20,15 @@ billing system; users bring their own provider credentials.
 
 ## What Comes Next
 
-Identity, tenant isolation, secure per-user OpenAI settings, persistent conversations, CSV ingestion,
-deterministic analytics, and stateful LangGraph orchestration are in place. Users can upload a CSV, ask
-natural-language analytical questions, answer material clarifications after a reload, and receive verified
-results, provenance and trusted charts. OpenAI creates strict plans and explanations; an allow-listed
-compiler and bounded DuckDB execution remain in control of every calculation.
+The MVP phases now include identity and tenant isolation, secure per-user OpenAI settings, persistent
+conversations, CSV ingestion, deterministic analytics, LangGraph orchestration, filtered RAG/memory,
+schema-grounded prompt suggestions, cross-store dataset/account deletion and reproducible release evidence.
+OpenAI plans and explains while an allow-listed compiler and bounded DuckDB execution control calculations.
 
-The next product milestone is tenant-filtered retrieval and typed memory. It will index dataset semantics
-and explicitly confirmed business definitions, retrieve only compatible user/dataset versions, disclose
-rules applied to a plan, and coordinate deletion across PostgreSQL and Qdrant. The final phase adds
-follow-up suggestions, evaluation artifacts, accessibility review and release hardening.
+The next work is deployment and operational validation: managed production secrets/KMS, observability,
+backup/restore exercises, the documented cross-browser accessibility matrix and tagged-release smoke tests.
+Optional later product extensions include conversation compaction, user preferences, broader document
+retrieval, reranking, memory-management UI and verified insights backed by persisted result provenance.
 
 Detailed progress and the authoritative next implementation slice are tracked in
 [`docs/implementation.md`](./docs/implementation.md).

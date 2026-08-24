@@ -4,7 +4,8 @@ import {
   agentRunJobPayloadSchema,
   datasetIngestionJobPayloadSchema,
   knowledgeDeleteJobPayloadSchema,
-  knowledgeIndexJobPayloadSchema
+  knowledgeIndexJobPayloadSchema,
+  privacyDeleteJobPayloadSchema
 } from "@agentic-csv/contracts";
 import { outboxEvents } from "../../drizzle/schema";
 import type { DatabaseClient } from "../database/client";
@@ -13,7 +14,8 @@ import {
   createAgentRunQueue,
   createDatasetIngestionQueue,
   createKnowledgeDeleteQueue,
-  createKnowledgeIndexQueue
+  createKnowledgeIndexQueue,
+  createPrivacyDeleteQueue
 } from "./queues";
 import type { AppEnv } from "../config/env";
 
@@ -22,6 +24,7 @@ export class OutboxDispatcher {
   private readonly agentRunQueue;
   private readonly knowledgeIndexQueue;
   private readonly knowledgeDeleteQueue;
+  private readonly privacyDeleteQueue;
 
   public constructor(
     private readonly database: DatabaseClient,
@@ -32,6 +35,7 @@ export class OutboxDispatcher {
     this.agentRunQueue = createAgentRunQueue(env);
     this.knowledgeIndexQueue = createKnowledgeIndexQueue(env);
     this.knowledgeDeleteQueue = createKnowledgeDeleteQueue(env);
+    this.privacyDeleteQueue = createPrivacyDeleteQueue(env);
   }
 
   public async dispatchBatch(limit = 25): Promise<number> {
@@ -45,7 +49,8 @@ export class OutboxDispatcher {
             "queue.dataset.ingest.v1",
             "queue.agent.run.v1",
             "queue.knowledge.index.v1",
-            "queue.knowledge.delete.v1"
+            "queue.knowledge.delete.v1",
+            "queue.privacy.delete.v1"
           ])
         )
       )
@@ -66,6 +71,9 @@ export class OutboxDispatcher {
             break;
           case "knowledge.delete.v1":
             await this.knowledgeDeleteQueue.add(payload.jobName, payload, { jobId });
+            break;
+          case "privacy.delete.v1":
+            await this.privacyDeleteQueue.add(payload.jobName, payload, { jobId });
             break;
           case "dataset.ingest.v1":
             await this.datasetQueue.add(payload.jobName, payload, { jobId });
@@ -98,7 +106,8 @@ export class OutboxDispatcher {
       this.datasetQueue.close(),
       this.agentRunQueue.close(),
       this.knowledgeIndexQueue.close(),
-      this.knowledgeDeleteQueue.close()
+      this.knowledgeDeleteQueue.close(),
+      this.privacyDeleteQueue.close()
     ]);
   }
 }
@@ -111,6 +120,8 @@ function parseQueuePayload(eventName: string, payload: unknown) {
       return knowledgeIndexJobPayloadSchema.parse(payload);
     case "queue.knowledge.delete.v1":
       return knowledgeDeleteJobPayloadSchema.parse(payload);
+    case "queue.privacy.delete.v1":
+      return privacyDeleteJobPayloadSchema.parse(payload);
     case "queue.dataset.ingest.v1":
       return datasetIngestionJobPayloadSchema.parse(payload);
     default:

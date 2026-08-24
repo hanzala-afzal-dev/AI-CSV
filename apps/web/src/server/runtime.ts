@@ -2,7 +2,9 @@ import {
   ConversationService,
   DatasetService,
   IdentityService,
-  ProviderSettingsService
+  PrivacyDeletionService,
+  ProviderSettingsService,
+  SuggestionService
 } from "@agentic-csv/application";
 import { loadEnv, type AppEnv } from "@agentic-csv/infrastructure/config";
 import {
@@ -25,7 +27,9 @@ import {
   PostgresConversationRepository,
   PostgresDatasetRepository,
   PostgresAnalysisRepository,
-  PostgresProviderSettingsRepository
+  PostgresPrivacyDeletionRepository,
+  PostgresProviderSettingsRepository,
+  PostgresSuggestionRepository
 } from "@agentic-csv/infrastructure";
 import { RedisLeaseLimiter } from "@agentic-csv/infrastructure";
 import { createS3Client, S3ObjectStorage } from "@agentic-csv/infrastructure/storage";
@@ -45,6 +49,8 @@ export interface WebRuntime {
   readonly conversationService: ConversationService;
   readonly datasetService: DatasetService;
   readonly analysisRepository: PostgresAnalysisRepository;
+  readonly suggestionService: SuggestionService;
+  readonly privacyDeletionService: PrivacyDeletionService;
 }
 
 function createRuntime(): WebRuntime {
@@ -105,7 +111,11 @@ function createRuntime(): WebRuntime {
     ),
     conversationService: new ConversationService(conversationRepository),
     datasetService: new DatasetService(datasetRepository),
-    analysisRepository: new PostgresAnalysisRepository(database)
+    analysisRepository: new PostgresAnalysisRepository(database),
+    suggestionService: new SuggestionService(new PostgresSuggestionRepository(database)),
+    privacyDeletionService: new PrivacyDeletionService(
+      new PostgresPrivacyDeletionRepository(database)
+    )
   };
 }
 

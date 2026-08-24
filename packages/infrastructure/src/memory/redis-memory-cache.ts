@@ -48,6 +48,7 @@ export class RedisMemoryRetrievalCache implements MemoryRetrievalCache {
       "memory-context",
       "v1",
       input.userId,
+      input.datasetId,
       input.datasetVersionId,
       input.revision,
       queryHash

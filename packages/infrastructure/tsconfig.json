@@ -10,5 +10,5 @@
     "rootDir": "..",
     "outDir": "dist"
   },
-  "include": ["src/**/*.ts", "drizzle/**/*.ts", "tests/**/*.ts"]
+  "include": ["src/**/*.ts", "drizzle/**/*.ts", "scripts/**/*.ts", "tests/**/*.ts"]
 }

@@ -98,7 +98,7 @@ export function AnalysisArtifact({
       ) : null}
       <details className="analysis-disclosure">
         <summary>Data and provenance</summary>
-        <ResultTable result={artifact.result} />
+        <ResultTable result={artifact.result} caption={artifact.chart.spec.title} />
         <dl className="analysis-provenance">
           <div>
             <dt>Dataset version</dt>
@@ -155,7 +155,7 @@ function TrustedChart({
   if (spec.type === "line") return <LineChart spec={spec} rows={result.rows} />;
   if (spec.type === "pie") return <PieChartView spec={spec} rows={result.rows} />;
   if (spec.type === "scatter") return <ScatterChartView spec={spec} rows={result.rows} />;
-  return <ResultTable result={result} />;
+  return <ResultTable result={result} caption={spec.title} />;
 }
 
 function BarChart({
@@ -318,9 +318,16 @@ function ScatterChartView({
   );
 }
 
-function ResultTable({ result }: { readonly result: AnalysisResultArtifactContract }) {
+function ResultTable({
+  result,
+  caption
+}: {
+  readonly result: AnalysisResultArtifactContract;
+  readonly caption: string;
+}) {
   return (
     <div className="analysis-table-scroll">
+      <caption className="sr-only">{caption}</caption>
       <table className="analysis-table">
         <thead>
           <tr>

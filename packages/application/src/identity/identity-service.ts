@@ -228,6 +228,9 @@ export class IdentityService {
   ): Promise<readonly SessionSummary[]> {
     return this.repository.listSessions(userId, currentSessionId);
   }
+  public reauthenticate(userId: string, currentPassword: string): Promise<void> {
+    return this.requireCurrentPassword(userId, currentPassword);
+  }
 
   public revokeSession(userId: string, sessionId: string): Promise<boolean> {
     return this.repository.revokeSession(userId, sessionId, this.now());

@@ -47,6 +47,7 @@ describe("DuckDB analysis compiler", () => {
     expect(compiled.sql).not.toContain("Online");
     expect(compiled.parameters).toEqual({ filter_1: "Online' OR 1=1" });
     expect(compiled.sql).not.toMatch(/;|attach|install|load|read_csv/i);
+    expect(compiled.sql).toContain('order by "measure_1" desc, "dimension_1" asc');
   });
 
   it("rejects unknown columns and invalid aggregation types before execution", () => {

@@ -4,7 +4,8 @@ export const datasetStatuses = [
   "profiling",
   "ready",
   "failed",
-  "deleting"
+  "deleting",
+  "deleted"
 ] as const;
 
 export type DatasetStatus = (typeof datasetStatuses)[number];

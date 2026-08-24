@@ -222,14 +222,22 @@ function compileSort(
   plan: AnalysisPlanContract,
   schema: readonly ResultColumnContract[]
 ): string {
+  const selected = new Set<string>();
   const values = plan.sort.map((sort) => {
     const field = `${sort.target}_${sort.index + 1}`;
     if (!schema.some((column) => column.field === field)) {
       invalid("Sort target does not exist in the result.");
     }
+    selected.add(field);
     return `${quoteIdentifier(field)} ${sort.direction}`;
   });
-  if (values.length > 0) return values.join(", ");
+  if (values.length > 0) {
+    const tieBreakers = schema
+      .map((column) => column.field)
+      .filter((field) => !selected.has(field))
+      .map((field) => `${quoteIdentifier(field)} asc`);
+    return [...values, ...tieBreakers].join(", ");
+  }
   if (plan.dimensions.length > 0 && plan.measures.length > 0) {
     return '"measure_1" desc, "dimension_1" asc';
   }

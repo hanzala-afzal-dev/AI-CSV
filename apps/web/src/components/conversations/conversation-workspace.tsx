@@ -10,9 +10,11 @@ import {
   type ConversationSummaryContract,
   type DatasetDetailContract,
   type DatasetLimitsContract,
-  type DatasetProfileContract
+  type DatasetProfileContract,
+  type PromptSuggestionResponseContract
 } from "@agentic-csv/contracts";
 import { CsvDatasetPanel } from "@/components/datasets/csv-dataset-panel";
+import { PrivacyDeletionDialog } from "@/components/privacy/privacy-deletion-dialog";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
@@ -30,11 +32,13 @@ import {
   sha256Base64,
   uploadToSignedUrl
 } from "@/features/datasets/api";
+import { deleteDataset } from "@/features/privacy/api";
 import {
   cancelRun,
   createConversation,
   deleteConversation,
   getConversation,
+  getPromptSuggestions,
   getProviderSettings,
   listConversations,
   renameConversation,
@@ -46,6 +50,7 @@ import {
 import { ConversationSidebar } from "./conversation-sidebar";
 import { MessageTimeline } from "./message-timeline";
 import { PromptComposer } from "./prompt-composer";
+import { PromptSuggestions } from "./prompt-suggestions";
 
 export function ConversationWorkspace({
   initialConversationId
@@ -72,6 +77,11 @@ export function ConversationWorkspace({
   const [datasetBusy, setDatasetBusy] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [datasetError, setDatasetError] = useState<string | null>(null);
+  const [datasetDeleteOpen, setDatasetDeleteOpen] = useState(false);
+  const [suggestions, setSuggestions] = useState<PromptSuggestionResponseContract | null>(
+    null
+  );
+  const [suggestionsLoading, setSuggestionsLoading] = useState(false);
   const [draft, setDraft] = useState("");
   const [run, setRun] = useState<AgentRunSummaryContract | null>(null);
   const [streamedText, setStreamedText] = useState("");
@@ -105,9 +115,9 @@ export function ConversationWorkspace({
   );
 
   const loadList = useCallback(
-    async (cursor?: string) => {
+    async (cursor?: string, showLoading = true) => {
       const append = cursor !== undefined;
-      setListLoading(true);
+      if (showLoading) setListLoading(true);
       try {
         const page = await listConversations(view, cursor);
         setConversations((current) =>
@@ -119,15 +129,15 @@ export function ConversationWorkspace({
       } catch (cause) {
         handleError(cause, "Conversations could not be loaded.");
       } finally {
-        setListLoading(false);
+        if (showLoading) setListLoading(false);
       }
     },
     [handleError, view]
   );
 
   const loadDetail = useCallback(
-    async (conversationId: string) => {
-      setDetailLoading(true);
+    async (conversationId: string, showLoading = true) => {
+      if (showLoading) setDetailLoading(true);
       try {
         const next = await getConversation(conversationId);
         setDetail(next);
@@ -135,12 +145,14 @@ export function ConversationWorkspace({
         setActiveDataset(next.conversation.activeDataset);
         if (next.conversation.status === "archived") setView("archived");
       } catch (cause) {
-        setDetail(null);
-        setRun(null);
-        setActiveDataset(null);
+        if (showLoading) {
+          setDetail(null);
+          setRun(null);
+          setActiveDataset(null);
+        }
         handleError(cause, "Conversation could not be loaded.");
       } finally {
-        setDetailLoading(false);
+        if (showLoading) setDetailLoading(false);
       }
     },
     [handleError]
@@ -225,6 +237,53 @@ export function ConversationWorkspace({
   }, [activeDataset, dataset?.activeVersion, loadDataset]);
 
   useEffect(() => {
+    const datasetVersionId = activeDataset?.datasetVersionId;
+    const version = dataset?.activeVersion;
+    const ready =
+      version?.id === datasetVersionId &&
+      version?.status === "ready" &&
+      datasetProfile !== null;
+    if (!initialConversationId || !datasetVersionId || !ready || run) {
+      setSuggestions(null);
+      setSuggestionsLoading(false);
+      return;
+    }
+    let active = true;
+    setSuggestionsLoading(true);
+    void getPromptSuggestions(initialConversationId)
+      .then((response) => {
+        if (!active) return;
+        setSuggestions(
+          response.state === "ready" && response.datasetVersionId === datasetVersionId
+            ? response
+            : null
+        );
+      })
+      .catch((cause) => {
+        if (!active) return;
+        setSuggestions(null);
+        if (cause instanceof ClientApiError && cause.status === 401) {
+          router.replace("/login");
+        }
+      })
+      .finally(() => {
+        if (active) setSuggestionsLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [
+    activeDataset?.datasetVersionId,
+    dataset?.activeVersion?.id,
+    dataset?.activeVersion?.status,
+    datasetProfile,
+    detail?.messages.length,
+    initialConversationId,
+    router,
+    run
+  ]);
+
+  useEffect(() => {
     let active = true;
     void listDatasets()
       .then((result) => {
@@ -262,39 +321,47 @@ export function ConversationWorkspace({
 
   const refreshAfterRun = useCallback(
     async (conversationId: string) => {
-      await Promise.all([loadDetail(conversationId), loadList()]);
+      await Promise.all([loadDetail(conversationId, false), loadList(undefined, false)]);
       setStreamedText("");
     },
     [loadDetail, loadList]
   );
 
+  const streamRunId = run?.id ?? null;
+  const streamConversationId = run?.conversationId ?? null;
+  const streamEventsUrl = run?.eventsUrl ?? null;
+  const streamActive = Boolean(run && run.status !== "waiting_for_user");
+
   useEffect(() => {
-    if (!run) return;
-    if (run.status === "waiting_for_user") return;
-    const lastSequence = lastEventSequences.current.get(run.id) ?? 0;
-    const separator = run.eventsUrl.includes("?") ? "&" : "?";
-    const source = new EventSource(`${run.eventsUrl}${separator}after=${lastSequence}`);
+    if (!streamActive || !streamRunId || !streamConversationId || !streamEventsUrl)
+      return;
+    const lastSequence = lastEventSequences.current.get(streamRunId) ?? 0;
+    const separator = streamEventsUrl.includes("?") ? "&" : "?";
+    const source = new EventSource(`${streamEventsUrl}${separator}after=${lastSequence}`);
     let terminal = false;
     const handleEvent = (raw: Event) => {
+      if (terminal) return;
       if (!(raw instanceof MessageEvent) || typeof raw.data !== "string") return;
       let decoded: unknown;
       try {
         decoded = JSON.parse(raw.data);
       } catch {
+        terminal = true;
         setRunError("The response stream returned invalid data.");
         source.close();
         return;
       }
       const parsed = runEventSchema.safeParse(decoded);
       if (!parsed.success) {
+        terminal = true;
         setRunError("The response stream returned invalid data.");
         source.close();
         return;
       }
       const event = parsed.data;
-      const seen = lastEventSequences.current.get(run.id) ?? 0;
+      const seen = lastEventSequences.current.get(streamRunId) ?? 0;
       if (event.sequence <= seen) return;
-      lastEventSequences.current.set(run.id, event.sequence);
+      lastEventSequences.current.set(streamRunId, event.sequence);
       if (event.type === "run.started") {
         setRun((current) => (current ? { ...current, status: "running" } : current));
         setProgressText("Starting analysis");
@@ -319,7 +386,7 @@ export function ConversationWorkspace({
       }
       if (terminal) {
         source.close();
-        void refreshAfterRun(run.conversationId);
+        void refreshAfterRun(streamConversationId);
       }
     };
     const eventTypes = [
@@ -340,14 +407,7 @@ export function ConversationWorkspace({
       }
     };
     return () => source.close();
-  }, [
-    refreshAfterRun,
-    run?.conversationId,
-    run?.eventsUrl,
-    run?.id,
-    run?.updatedAt,
-    run?.status
-  ]);
+  }, [refreshAfterRun, streamActive, streamConversationId, streamEventsUrl, streamRunId]);
 
   const createNewConversation = async () => {
     setCreating(true);
@@ -481,8 +541,7 @@ export function ConversationWorkspace({
         createdAt: now,
         updatedAt: now
       });
-      await loadDetail(conversationId);
-      await loadList();
+      await Promise.all([loadDetail(conversationId, false), loadList(undefined, false)]);
     } catch (cause) {
       handleError(cause, "Message could not be sent.");
     } finally {
@@ -506,7 +565,7 @@ export function ConversationWorkspace({
       );
       setProgressText("Resuming analysis");
       setRun(resumed);
-      await loadDetail(run.conversationId);
+      await loadDetail(run.conversationId, false);
     } catch (cause) {
       if (cause instanceof ClientApiError && cause.status === 401) {
         router.replace("/login");
@@ -587,6 +646,23 @@ export function ConversationWorkspace({
     }
   };
 
+  const confirmDatasetDeletion = async (currentPassword: string) => {
+    if (!dataset || !initialConversationId) {
+      throw new Error("Dataset is no longer available.");
+    }
+    setDatasetBusy(true);
+    try {
+      await deleteDataset(dataset.id, currentPassword);
+      setDataset(null);
+      setDatasetProfile(null);
+      setActiveDataset(null);
+      setSuggestions(null);
+      await loadDetail(initialConversationId, false);
+    } finally {
+      setDatasetBusy(false);
+    }
+  };
+
   const current = detail?.conversation ?? null;
   const archived = current?.status === "archived";
   const datasetReady =
@@ -603,7 +679,7 @@ export function ConversationWorkspace({
       compact={Boolean(detail?.messages.length)}
       onChoose={() => fileInputRef.current?.click()}
       onFile={(file) => void uploadCsv(file)}
-      onSuggestion={setDraft}
+      onDelete={() => setDatasetDeleteOpen(true)}
     />
   );
   return (
@@ -758,6 +834,18 @@ export function ConversationWorkspace({
             }
           />
         </div>
+        <PromptSuggestions
+          suggestions={
+            draft.length === 0 && suggestions?.state === "ready"
+              ? suggestions.followUps.length > 0
+                ? suggestions.followUps
+                : suggestions.initial
+              : []
+          }
+          loading={draft.length === 0 && suggestionsLoading}
+          disabled={Boolean(run) || archived || actionBusy}
+          onSelect={(promptText) => setDraft(promptText)}
+        />
         <PromptComposer
           value={draft}
           onChange={setDraft}
@@ -819,6 +907,14 @@ export function ConversationWorkspace({
           />
         </div>
       </Dialog>
+
+      <PrivacyDeletionDialog
+        open={datasetDeleteOpen}
+        scope="dataset"
+        resourceName={dataset?.name ?? "Dataset"}
+        onOpenChange={setDatasetDeleteOpen}
+        onConfirm={confirmDatasetDeletion}
+      />
 
       <Dialog
         open={deleteTarget !== null}

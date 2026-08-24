@@ -1,5 +1,7 @@
 import {
   CreateBucketCommand,
+  DeleteObjectCommand,
+  DeleteObjectsCommand,
   GetObjectCommand,
   HeadBucketCommand,
   HeadObjectCommand,
@@ -101,6 +103,43 @@ export class S3ObjectStorage implements ObjectStorage {
     };
   }
 
+  public async deleteObject(objectKey: string): Promise<void> {
+    if (!objectKey.startsWith("users/")) {
+      throw new ObjectStorageError("OBJECT_UNAVAILABLE", "Invalid object key.");
+    }
+    try {
+      await this.client.send(
+        new DeleteObjectCommand({ Bucket: this.bucket, Key: objectKey })
+      );
+    } catch (error) {
+      throw objectStorageFailure(error);
+    }
+  }
+
+  public async deleteObjects(objectKeys: readonly string[]): Promise<void> {
+    const keys = [...new Set(objectKeys)];
+    for (const objectKey of keys) {
+      if (!objectKey.startsWith("users/")) {
+        throw new ObjectStorageError("OBJECT_UNAVAILABLE", "Invalid object key.");
+      }
+    }
+    for (let offset = 0; offset < keys.length; offset += 1000) {
+      const batch = keys.slice(offset, offset + 1000);
+      try {
+        const result = await this.client.send(
+          new DeleteObjectsCommand({
+            Bucket: this.bucket,
+            Delete: { Objects: batch.map((Key) => ({ Key })), Quiet: true }
+          })
+        );
+        if (result.Errors && result.Errors.length > 0) {
+          throw new Error("Object storage did not delete every requested object.");
+        }
+      } catch (error) {
+        throw objectStorageFailure(error);
+      }
+    }
+  }
   public async inspectObject(objectKey: string): Promise<StoredObjectMetadata> {
     let response;
     try {
