@@ -130,12 +130,11 @@ export async function protectPublicAuthRequest(
     category === "recovery"
       ? env.RATE_LIMIT_RECOVERY_MAX_REQUESTS
       : env.RATE_LIMIT_LOGIN_MAX_REQUESTS;
-  const ipBucket = hashPrivateValue(readClientAddress(request), env.AUTH_SECRET);
   const identifierBucket = hashPrivateValue(
     identifier.trim().normalize("NFKC").toLowerCase(),
     env.AUTH_SECRET
   );
-  await enforceRateLimit(`auth:${category}:ip:${ipBucket}`, limit);
+  await enforceClientAddressRateLimit(request, `auth:${category}:ip`, limit);
   await enforceRateLimit(`auth:${category}:identifier:${identifierBucket}`, limit);
 }
 
@@ -184,8 +183,7 @@ export async function protectDatasetUpload(
       ? runtime.env.RATE_LIMIT_UPLOAD_COMPLETION_MAX_REQUESTS
       : runtime.env.RATE_LIMIT_UPLOAD_INTENT_MAX_REQUESTS;
   const userHeaders = await enforceRateLimit(`dataset:${category}:user:${userId}`, limit);
-  const ipBucket = hashPrivateValue(readClientAddress(request), runtime.env.AUTH_SECRET);
-  await enforceRateLimit(`dataset:${category}:ip:${ipBucket}`, limit);
+  await enforceClientAddressRateLimit(request, `dataset:${category}:ip`, limit);
   return userHeaders;
 }
 
@@ -197,8 +195,7 @@ export async function protectPrivacyDeletion(
   const runtime = getRuntime();
   const limit = Math.min(5, runtime.env.RATE_LIMIT_RECOVERY_MAX_REQUESTS);
   const userHeaders = await enforceRateLimit(`privacy:${scope}:user:${userId}`, limit);
-  const ipBucket = hashPrivateValue(readClientAddress(request), runtime.env.AUTH_SECRET);
-  await enforceRateLimit(`privacy:${scope}:ip:${ipBucket}`, limit);
+  await enforceClientAddressRateLimit(request, `privacy:${scope}:ip`, limit);
   return userHeaders;
 }
 
@@ -523,6 +520,18 @@ async function enforceRateLimit(
   };
   if (!decision.allowed) throw rateLimitError(decision.resetAt, headers);
   return headers;
+}
+
+async function enforceClientAddressRateLimit(
+  request: Request,
+  keyPrefix: string,
+  limit: number
+): Promise<void> {
+  const env = getRuntime().env;
+  const address = readClientAddress(request);
+  if (address === "unknown") return;
+  const ipBucket = hashPrivateValue(address, env.AUTH_SECRET);
+  await enforceRateLimit(`${keyPrefix}:${ipBucket}`, limit);
 }
 
 function readClientAddress(request: Request): string {
