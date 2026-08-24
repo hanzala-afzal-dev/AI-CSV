@@ -9,11 +9,14 @@ export function createQdrantClient(env: AppEnv): QdrantClient {
   });
 }
 
-export async function isQdrantReady(env: Pick<AppEnv, "QDRANT_URL" | "QDRANT_API_KEY">) {
-  const response = await fetch(
-    new URL("/collections", env.QDRANT_URL),
-    env.QDRANT_API_KEY ? { headers: { "api-key": env.QDRANT_API_KEY } } : {}
-  );
+export async function isQdrantReady(
+  env: Pick<AppEnv, "QDRANT_URL" | "QDRANT_API_KEY">,
+  timeoutMs = 2_000
+) {
+  const response = await fetch(new URL("/collections", env.QDRANT_URL), {
+    signal: AbortSignal.timeout(timeoutMs),
+    ...(env.QDRANT_API_KEY ? { headers: { "api-key": env.QDRANT_API_KEY } } : {})
+  });
 
   return response.ok;
 }

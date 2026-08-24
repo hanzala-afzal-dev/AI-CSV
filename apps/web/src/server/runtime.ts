@@ -23,13 +23,20 @@ import { RedisRateLimiter } from "@agentic-csv/infrastructure/rate-limit";
 import { createRedisClient, type RedisClient } from "@agentic-csv/infrastructure/redis";
 import {
   AesGcmCredentialCipher,
+  checkPostgres,
+  checkQdrant,
+  checkRedis,
+  checkS3,
+  createReadinessReport,
   OpenAiProviderGateway,
   PostgresConversationRepository,
   PostgresDatasetRepository,
   PostgresAnalysisRepository,
   PostgresPrivacyDeletionRepository,
   PostgresProviderSettingsRepository,
-  PostgresSuggestionRepository
+  PostgresSuggestionRepository,
+  type DependencyStatus,
+  type ReadinessReport
 } from "@agentic-csv/infrastructure";
 import { RedisLeaseLimiter } from "@agentic-csv/infrastructure";
 import { createS3Client, S3ObjectStorage } from "@agentic-csv/infrastructure/storage";
@@ -53,7 +60,12 @@ export interface WebRuntime {
   readonly privacyDeletionService: PrivacyDeletionService;
 }
 
-function createRuntime(): WebRuntime {
+interface WebRuntimeState {
+  readonly runtime: WebRuntime;
+  readonly readinessChecks: readonly (() => Promise<DependencyStatus>)[];
+}
+
+function createRuntimeState(): WebRuntimeState {
   const env = loadEnv();
   const pool = createPgPool(env);
   const database = createDatabaseClient(pool);
@@ -70,7 +82,7 @@ function createRuntime(): WebRuntime {
   const providerRepository = new PostgresProviderSettingsRepository(database);
   const conversationRepository = new PostgresConversationRepository(database);
   const datasetRepository = new PostgresDatasetRepository(database);
-  return {
+  const runtime: WebRuntime = {
     env,
     database,
     redis,
@@ -117,13 +129,30 @@ function createRuntime(): WebRuntime {
       new PostgresPrivacyDeletionRepository(database)
     )
   };
+  return {
+    runtime,
+    readinessChecks: [
+      () => checkPostgres(pool),
+      () => checkRedis(redis),
+      () => checkQdrant(env),
+      () => checkS3(s3Client, env.S3_BUCKET)
+    ]
+  };
 }
 
-let runtime: WebRuntime | undefined;
+let runtimeState: WebRuntimeState | undefined;
+
+function getRuntimeState(): WebRuntimeState {
+  runtimeState ??= createRuntimeState();
+  return runtimeState;
+}
 
 export function getRuntime(): WebRuntime {
-  runtime ??= createRuntime();
-  return runtime;
+  return getRuntimeState().runtime;
+}
+
+export function getRuntimeReadinessReport(): Promise<ReadinessReport> {
+  return createReadinessReport(getRuntimeState().readinessChecks);
 }
 
 export async function ensureRedisConnected(): Promise<void> {
