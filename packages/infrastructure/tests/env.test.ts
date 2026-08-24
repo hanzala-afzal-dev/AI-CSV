@@ -68,7 +68,21 @@ describe("parseEnv", () => {
       expect(result.data.APP_PORT).toBe(3000);
       expect(result.data.S3_FORCE_PATH_STYLE).toBe(true);
       expect(result.data.APP_ENCRYPTION_PREVIOUS_KEYS).toBeUndefined();
+      expect(result.data.TRUSTED_PROXY_HOPS).toBe(1);
     }
+  });
+
+  it("parses and bounds the trusted proxy hop count", () => {
+    const valid = parseEnv({
+      ...validEnv,
+      TRUST_PROXY: "true",
+      TRUSTED_PROXY_HOPS: "2"
+    });
+    expect(valid.success).toBe(true);
+    if (valid.success) expect(valid.data.TRUSTED_PROXY_HOPS).toBe(2);
+
+    expect(parseEnv({ ...validEnv, TRUSTED_PROXY_HOPS: "0" }).success).toBe(false);
+    expect(parseEnv({ ...validEnv, TRUSTED_PROXY_HOPS: "11" }).success).toBe(false);
   });
 
   it("fails clearly for short auth secrets", () => {
